@@ -30,7 +30,7 @@ export async function up(client: PoolClient): Promise<void> {
     CREATE TABLE users (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
-      email VARCHAR(255) NOT NULL,
+      username VARCHAR(100) NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       first_name VARCHAR(100) NOT NULL,
       last_name VARCHAR(100) NOT NULL,
@@ -43,12 +43,12 @@ export async function up(client: PoolClient): Promise<void> {
       last_login TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(clinic_id, email)
+      UNIQUE(clinic_id, username)
     );
   `);
 
   await client.query(`CREATE INDEX idx_users_clinic ON users(clinic_id);`);
-  await client.query(`CREATE INDEX idx_users_email ON users(email);`);
+  await client.query(`CREATE INDEX idx_users_username ON users(username);`);
 
   // ── Sessions ──
   await client.query(`
