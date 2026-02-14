@@ -8,18 +8,22 @@ Deploy on **Vercel** (demo/remote access) or **local Docker** (on-premises produ
 - **Backend**: Express.js + TypeScript + PostgreSQL (Vercel serverless or standalone)
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS (PWA-ready)
 - **Deployment**: Vercel (cloud) or Docker Compose with Caddy (on-prem)
-- **Database**: Vercel Postgres / Neon (cloud) or local PostgreSQL (on-prem)
+- **Database**: Neon Postgres (cloud) or local PostgreSQL (on-prem)
 - **Security**: RBAC, audit logging, encrypted backups, PHI-safe logging
 
 ---
 
 ## Deploy on Vercel (Recommended for Demo)
 
-### 1. Create Vercel Postgres Database
+### 1. Add Neon Postgres Database
 
 1. Go to your Vercel project dashboard
-2. Storage tab > Create Database > Postgres
-3. This auto-sets `POSTGRES_URL` in your environment
+2. **Storage** tab > **Browse Marketplace** > **Neon**
+3. Click **Create** and follow the prompts to provision a Neon database
+4. This auto-sets `POSTGRES_URL` and `DATABASE_URL` in your Vercel env
+
+> Neon replaced the old "Vercel Postgres" option. Same Postgres, better features
+> (branching, autoscaling, scale-to-zero). Billing stays unified through Vercel.
 
 ### 2. Set Environment Variables
 
@@ -27,7 +31,7 @@ In Vercel dashboard > Settings > Environment Variables:
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | *(auto-set by Vercel Postgres)* |
+| `DATABASE_URL` | *(auto-set by Neon integration)* |
 | `JWT_SECRET` | `openssl rand -hex 64` |
 | `NODE_ENV` | `production` |
 
@@ -40,12 +44,14 @@ npm i -g vercel
 # Deploy
 vercel
 
-# Run migrations against Vercel Postgres
+# Pull your Neon connection string from Vercel
 vercel env pull .env.local
-DATABASE_URL="your-neon-connection-string" npm run migrate
+
+# Run migrations (uses DATABASE_URL from .env.local)
+source .env.local && npm run migrate
 
 # Seed demo data
-DATABASE_URL="your-neon-connection-string" npm run seed
+source .env.local && npm run seed
 ```
 
 ### 4. Access
@@ -142,7 +148,7 @@ The same codebase works in both environments:
 | | Vercel (Cloud) | Docker (On-Prem) |
 |--|----------------|-------------------|
 | **API** | Serverless function (`api/index.ts`) | Express server (`server/src/index.ts`) |
-| **Database** | Vercel Postgres (Neon) | Local PostgreSQL container |
+| **Database** | Neon Postgres (via Vercel Marketplace) | Local PostgreSQL container |
 | **Files** | Ephemeral `/tmp` (add Vercel Blob for persistence) | Local disk `./uploads` |
 | **HTTPS** | Automatic via Vercel | Caddy with local CA certs |
 | **Access** | Public URL (restrict via auth) | LAN only (optional VPN) |

@@ -5,7 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),
 
-  // Database — supports Vercel Postgres (POSTGRES_URL), Neon, or local
+  // Database — supports Neon (POSTGRES_URL from Vercel marketplace) or local
   DATABASE_URL: z.string().default(
     process.env.POSTGRES_URL || 'postgresql://emr:emr_dev_password@localhost:5432/fvpt_emr'
   ),
