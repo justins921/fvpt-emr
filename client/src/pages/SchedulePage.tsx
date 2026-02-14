@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../services/api';
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isToday, isSameDay } from 'date-fns';
+import { format, addDays, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isSameMonth } from 'date-fns';
 
 interface Appointment {
   id: string; patient_id: string; therapist_id: string;
@@ -12,7 +12,7 @@ interface Appointment {
 }
 
 export default function SchedulePage() {
-  const [view, setView] = useState<'day' | 'week'>('day');
+  const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,10 @@ export default function SchedulePage() {
     setLoading(true);
     try {
       let start: Date, end: Date;
-      if (view === 'week') {
+      if (view === 'month') {
+        start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+        end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
+      } else if (view === 'week') {
         start = startOfWeek(currentDate, { weekStartsOn: 1 });
         end = endOfWeek(currentDate, { weekStartsOn: 1 });
       } else {
@@ -88,13 +91,14 @@ export default function SchedulePage() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <h1 className="text-2xl font-bold flex-1">Schedule</h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setCurrentDate(d => addDays(d, view === 'week' ? -7 : -1))} className="btn-ghost">←</button>
+          <button onClick={() => setCurrentDate(d => view === 'month' ? addMonths(d, -1) : addDays(d, view === 'week' ? -7 : -1))} className="btn-ghost">←</button>
           <button onClick={() => setCurrentDate(new Date())} className="btn-ghost text-sm">Today</button>
-          <button onClick={() => setCurrentDate(d => addDays(d, view === 'week' ? 7 : 1))} className="btn-ghost">→</button>
-          <span className="text-sm font-medium mx-2">{format(currentDate, 'MMMM d, yyyy')}</span>
+          <button onClick={() => setCurrentDate(d => view === 'month' ? addMonths(d, 1) : addDays(d, view === 'week' ? 7 : 1))} className="btn-ghost">→</button>
+          <span className="text-sm font-medium mx-2">{view === 'month' ? format(currentDate, 'MMMM yyyy') : format(currentDate, 'MMMM d, yyyy')}</span>
           <div className="flex border rounded-lg overflow-hidden">
             <button onClick={() => setView('day')} className={`px-3 py-1.5 text-sm ${view === 'day' ? 'bg-primary-600 text-white' : 'bg-white'}`}>Day</button>
             <button onClick={() => setView('week')} className={`px-3 py-1.5 text-sm ${view === 'week' ? 'bg-primary-600 text-white' : 'bg-white'}`}>Week</button>
+            <button onClick={() => setView('month')} className={`px-3 py-1.5 text-sm ${view === 'month' ? 'bg-primary-600 text-white' : 'bg-white'}`}>Month</button>
           </div>
           <button onClick={() => setShowNewForm(!showNewForm)} className="btn-primary text-sm">+ New</button>
         </div>
@@ -137,7 +141,66 @@ export default function SchedulePage() {
 
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>
+      ) : view === 'month' ? (
+        /* ── Month View ── */
+        (() => {
+          const monthStart = startOfMonth(currentDate);
+          const monthEnd = endOfMonth(currentDate);
+          const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+          const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+          const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+          const weeks: Date[][] = [];
+          for (let i = 0; i < calendarDays.length; i += 7) {
+            weeks.push(calendarDays.slice(i, i + 7));
+          }
+          return (
+            <div className="card overflow-x-auto p-0">
+              <div className="grid grid-cols-7 min-w-[700px]">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                  <div key={d} className="border-b bg-slate-50 p-2 text-center text-xs font-medium text-slate-500">{d}</div>
+                ))}
+                {weeks.map((week, wi) =>
+                  week.map(day => {
+                    const dayAppts = appointments.filter(a => isSameDay(new Date(a.start_time), day));
+                    const inMonth = isSameMonth(day, currentDate);
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={`border-b border-r min-h-[100px] p-1.5 cursor-pointer ${
+                          isToday(day) ? 'bg-primary-50' : inMonth ? 'bg-white' : 'bg-slate-50'
+                        }`}
+                        onClick={() => { setCurrentDate(day); setView('day'); }}
+                      >
+                        <div className={`text-xs mb-1 ${isToday(day) ? 'font-bold text-primary-600' : inMonth ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {format(day, 'd')}
+                        </div>
+                        {dayAppts.slice(0, 3).map(appt => (
+                          <div
+                            key={appt.id}
+                            className={`text-xs px-1 py-0.5 rounded mb-0.5 truncate ${
+                              appt.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              appt.status === 'cancelled' ? 'bg-red-100 text-red-800 line-through' :
+                              appt.status === 'no_show' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-primary-100 text-primary-800'
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); setCurrentDate(day); setView('day'); }}
+                          >
+                            {format(new Date(appt.start_time), 'h:mma')} {appt.patient_last_name}
+                          </div>
+                        ))}
+                        {dayAppts.length > 3 && (
+                          <div className="text-xs text-slate-500 px-1">+{dayAppts.length - 3} more</div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })()
       ) : (
+        /* ── Day / Week View ── */
         <div className="card overflow-x-auto p-0">
           <div className={`grid ${view === 'week' ? 'grid-cols-[60px_repeat(7,1fr)]' : 'grid-cols-[60px_1fr]'} min-w-[600px]`}>
             {/* Header */}
