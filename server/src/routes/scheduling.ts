@@ -28,9 +28,9 @@ router.get('/', requirePermission(Permission.SCHEDULE_VIEW), async (req: Request
     }
 
     let sql = `
-      SELECT a.*, 
+      SELECT a.*,
         p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn,
-        u.first_name as therapist_first_name, u.last_name as therapist_last_name
+        u.first_name as therapist_first_name, u.last_name as therapist_last_name, u.credential as therapist_credential
       FROM appointments a
       JOIN patients p ON a.patient_id = p.id
       JOIN users u ON a.therapist_id = u.id

@@ -161,6 +161,11 @@ export interface Clinic {
   updated_at: Date;
 }
 
+export type Credential = 'PT' | 'DPT' | 'PTA' | 'ATC' | 'OT' | 'SLP' | 'MD' | 'DO' | 'NP' | 'PA' | 'Office';
+
+/** Credentials that represent scheduling providers (shown as columns in the day view). */
+export const SCHEDULING_CREDENTIALS: Credential[] = ['PT', 'DPT', 'ATC'];
+
 export interface User {
   id: string;
   clinic_id: string;
@@ -169,6 +174,7 @@ export interface User {
   first_name: string;
   last_name: string;
   role: Role;
+  credential: Credential | null;
   npi: string | null;
   license_number: string | null;
   is_active: boolean;

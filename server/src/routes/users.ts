@@ -9,12 +9,15 @@ import { logAudit } from '../services/audit';
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
 
+const VALID_CREDENTIALS = ['PT', 'DPT', 'PTA', 'ATC', 'OT', 'SLP', 'MD', 'DO', 'NP', 'PA', 'Office'] as const;
+
 const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   role: z.nativeEnum(Role),
+  credential: z.enum(VALID_CREDENTIALS).optional().nullable(),
   npi: z.string().max(10).optional(),
   licenseNumber: z.string().max(50).optional(),
 });
@@ -23,7 +26,7 @@ const createUserSchema = z.object({
 router.get('/', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, role, npi, license_number, is_active, last_login, created_at
+      `SELECT id, email, first_name, last_name, role, credential, npi, license_number, is_active, last_login, created_at
        FROM users WHERE clinic_id = $1 ORDER BY last_name, first_name`,
       [req.auth!.clinicId]
     );
@@ -44,9 +47,9 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
     }
     const passwordHash = await hashPassword(input.password);
     const result = await query(
-      `INSERT INTO users (clinic_id, email, password_hash, first_name, last_name, role, npi, license_number)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [req.auth!.clinicId, input.email, passwordHash, input.firstName, input.lastName, input.role, input.npi || null, input.licenseNumber || null]
+      `INSERT INTO users (clinic_id, email, password_hash, first_name, last_name, role, credential, npi, license_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [req.auth!.clinicId, input.email, passwordHash, input.firstName, input.lastName, input.role, input.credential || null, input.npi || null, input.licenseNumber || null]
     );
     await logAudit({
       clinicId: req.auth!.clinicId,
@@ -76,7 +79,7 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
 router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, role, npi, license_number, is_active, mfa_enabled, last_login, created_at
+      `SELECT id, email, first_name, last_name, role, credential, npi, license_number, is_active, mfa_enabled, last_login, created_at
        FROM users WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
@@ -93,18 +96,19 @@ router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request,
 // Update user
 router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request, res: Response) => {
   try {
-    const { firstName, lastName, role, npi, licenseNumber, isActive } = req.body;
+    const { firstName, lastName, role, credential, npi, licenseNumber, isActive } = req.body;
     const result = await query(
       `UPDATE users SET
         first_name = COALESCE($3, first_name),
         last_name = COALESCE($4, last_name),
         role = COALESCE($5, role),
-        npi = COALESCE($6, npi),
-        license_number = COALESCE($7, license_number),
-        is_active = COALESCE($8, is_active)
+        credential = COALESCE($6, credential),
+        npi = COALESCE($7, npi),
+        license_number = COALESCE($8, license_number),
+        is_active = COALESCE($9, is_active)
        WHERE id = $1 AND clinic_id = $2
-       RETURNING id, email, first_name, last_name, role, is_active`,
-      [req.params.id, req.auth!.clinicId, firstName, lastName, role, npi, licenseNumber, isActive]
+       RETURNING id, email, first_name, last_name, role, credential, is_active`,
+      [req.params.id, req.auth!.clinicId, firstName, lastName, role, credential, npi, licenseNumber, isActive]
     );
     if (result.rows.length === 0) {
       res.status(404).json({ success: false, error: 'User not found' });

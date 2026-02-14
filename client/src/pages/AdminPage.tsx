@@ -53,7 +53,8 @@ function UsersManager() {
       await api.post('/users', {
         email: fd.get('email'), password: fd.get('password'),
         firstName: fd.get('firstName'), lastName: fd.get('lastName'),
-        role: fd.get('role'), npi: fd.get('npi') || undefined,
+        role: fd.get('role'), credential: fd.get('credential') || null,
+        npi: fd.get('npi') || undefined,
       });
       setShowForm(false); loadUsers();
     } catch (err) { alert(err instanceof ApiError ? err.message : 'Failed'); }
@@ -87,6 +88,18 @@ function UsersManager() {
               <option value="admin">Admin</option>
             </select>
           </div>
+          <div><label className="label">Credential</label>
+            <select name="credential" className="input">
+              <option value="">None</option>
+              <option value="PT">PT</option>
+              <option value="DPT">DPT</option>
+              <option value="PTA">PTA</option>
+              <option value="ATC">ATC</option>
+              <option value="OT">OT</option>
+              <option value="SLP">SLP</option>
+              <option value="Office">Office</option>
+            </select>
+          </div>
           <div><label className="label">NPI</label><input name="npi" className="input" /></div>
           <div className="sm:col-span-2 lg:col-span-3 flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
@@ -100,6 +113,7 @@ function UsersManager() {
             <th className="text-left px-4 py-3">Name</th>
             <th className="text-left px-4 py-3">Email</th>
             <th className="text-left px-4 py-3">Role</th>
+            <th className="text-left px-4 py-3">Credential</th>
             <th className="text-left px-4 py-3">Status</th>
             <th className="text-left px-4 py-3">Last Login</th>
             <th className="text-left px-4 py-3">Actions</th>
@@ -110,6 +124,7 @@ function UsersManager() {
                 <td className="px-4 py-3 font-medium">{u.last_name}, {u.first_name}</td>
                 <td className="px-4 py-3">{u.email}</td>
                 <td className="px-4 py-3 capitalize">{u.role.replace('_', ' ')}</td>
+                <td className="px-4 py-3">{u.credential ? <span className="badge-blue">{u.credential}</span> : <span className="text-slate-400">-</span>}</td>
                 <td className="px-4 py-3"><span className={u.is_active ? 'badge-green' : 'badge-red'}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
                 <td className="px-4 py-3">{u.is_active && <button onClick={() => deactivateUser(u.id)} className="text-xs text-red-600 underline">Deactivate</button>}</td>

@@ -16,6 +16,7 @@ async function run() {
 
     const migrations = [
       { name: '001_initial_schema', module: await import('./001_initial_schema') },
+      { name: '002_add_credential_to_users', module: await import('./002_add_credential_to_users') },
     ];
 
     if (direction === 'up') {
