@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fvpt-emr-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fvpt_emr
+      POSTGRES_USER: emr
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-emr_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emr -d fvpt_emr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    container_name: fvpt-emr-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://emr:${DB_PASSWORD:-emr_dev_password}@db:5432/fvpt_emr
+      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_IN_PRODUCTION_MIN_32_CHARS!!}
+      UPLOAD_DIR: /app/uploads
+      ALLOWED_ORIGINS: https://emr.local,https://${HOSTNAME:-localhost}
+      TRUST_PROXY: "true"
+    ports:
+      - "3001:3001"
+    volumes:
+      - uploads:/app/uploads
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.client
+    container_name: fvpt-emr-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: fvpt-emr-caddy
+    restart: unless-stopped
+    depends_on:
+      - server
+      - client
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

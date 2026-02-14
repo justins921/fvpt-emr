@@ -1,0 +1,38 @@
+{
+    # Use internal/self-signed TLS for LAN
+    # In production, configure with a local CA
+}
+
+emr.local {
+    tls internal
+
+    # API proxy
+    handle /api/* {
+        reverse_proxy server:3001
+    }
+
+    # Client app
+    handle {
+        reverse_proxy client:8080
+    }
+
+    # Security headers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/access.log
+        format filter {
+            wrap console
+            fields {
+                request>headers>Cookie delete
+                request>headers>Authorization delete
+            }
+        }
+    }
+}
