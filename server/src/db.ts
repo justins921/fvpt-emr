@@ -1,11 +1,19 @@
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 
+// In serverless (Vercel), use smaller pool and SSL for Neon/Vercel Postgres.
+// In local/Docker, use larger pool without SSL requirement.
+const isServerless = process.env.VERCEL === '1';
+const needsSsl = config.DATABASE_URL.includes('neon.tech')
+  || config.DATABASE_URL.includes('vercel-storage')
+  || config.DATABASE_URL.includes('sslmode=require');
+
 const pool = new Pool({
   connectionString: config.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
+  max: isServerless ? 3 : 20,
+  idleTimeoutMillis: isServerless ? 10000 : 30000,
   connectionTimeoutMillis: 5000,
+  ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 pool.on('error', (err) => {

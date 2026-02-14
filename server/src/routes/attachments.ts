@@ -22,7 +22,10 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
-const storage = multer.diskStorage({
+const isServerless = process.env.VERCEL === '1';
+
+// On Vercel, use /tmp for ephemeral storage. On local, use configured upload dir.
+const diskStorage = multer.diskStorage({
   destination: async (_req, _file, cb) => {
     const uploadDir = config.UPLOAD_DIR;
     await fs.mkdir(uploadDir, { recursive: true });
@@ -35,7 +38,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage,
+  storage: isServerless ? multer.memoryStorage() : diskStorage,
   limits: { fileSize: config.MAX_FILE_SIZE_MB * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -56,6 +59,11 @@ router.post('/', requirePermission(Permission.ATTACHMENT_UPLOAD), upload.single(
 
     const { patientId, noteId, claimId } = req.body;
 
+    // In serverless mode, files are in memory (req.file.buffer).
+    // In local mode, files are on disk (req.file.path).
+    const storagePath = isServerless ? `memory:${req.file.originalname}` : req.file.path;
+    const filename = req.file.filename || `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+
     const result = await query(
       `INSERT INTO attachments (clinic_id, patient_id, note_id, claim_id, filename, original_filename, mime_type, size_bytes, storage_path, uploaded_by, scan_status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
@@ -65,11 +73,11 @@ router.post('/', requirePermission(Permission.ATTACHMENT_UPLOAD), upload.single(
         patientId || null,
         noteId || null,
         claimId || null,
-        req.file.filename,
+        filename,
         req.file.originalname,
         req.file.mimetype,
         req.file.size,
-        req.file.path,
+        storagePath,
         req.auth!.userId,
       ]
     );

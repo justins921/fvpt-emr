@@ -1,15 +1,61 @@
 # FVPT-EMR: Physical Therapy EMR System
 
-Local-first, on-premises Physical Therapy Electronic Medical Records + Scheduling + Billing system.
+Physical Therapy Electronic Medical Records + Scheduling + Billing system.
+Deploy on **Vercel** (demo/remote access) or **local Docker** (on-premises production).
 
 ## Architecture
 
-- **Backend**: Express.js + TypeScript + PostgreSQL
+- **Backend**: Express.js + TypeScript + PostgreSQL (Vercel serverless or standalone)
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS (PWA-ready)
-- **Deployment**: Docker Compose with Caddy reverse proxy (HTTPS)
+- **Deployment**: Vercel (cloud) or Docker Compose with Caddy (on-prem)
+- **Database**: Vercel Postgres / Neon (cloud) or local PostgreSQL (on-prem)
 - **Security**: RBAC, audit logging, encrypted backups, PHI-safe logging
 
-## Quick Start (Development)
+---
+
+## Deploy on Vercel (Recommended for Demo)
+
+### 1. Create Vercel Postgres Database
+
+1. Go to your Vercel project dashboard
+2. Storage tab > Create Database > Postgres
+3. This auto-sets `POSTGRES_URL` in your environment
+
+### 2. Set Environment Variables
+
+In Vercel dashboard > Settings > Environment Variables:
+
+| Variable | Value |
+|----------|-------|
+| `DATABASE_URL` | *(auto-set by Vercel Postgres)* |
+| `JWT_SECRET` | `openssl rand -hex 64` |
+| `NODE_ENV` | `production` |
+
+### 3. Deploy
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+
+# Run migrations against Vercel Postgres
+vercel env pull .env.local
+DATABASE_URL="your-neon-connection-string" npm run migrate
+
+# Seed demo data
+DATABASE_URL="your-neon-connection-string" npm run seed
+```
+
+### 4. Access
+
+Your app is live at `https://your-project.vercel.app`.
+Login: `admin@clinic.local` / `password123!`
+
+---
+
+## Quick Start (Local Development)
 
 ```bash
 # 1. Start PostgreSQL
@@ -88,6 +134,24 @@ fvpt-emr/
 | `npm run backup` | Run encrypted backup |
 | `npm run restore` | Restore from backup |
 | `npm run docker:up` | Start via Docker Compose |
+
+## Switching Between Vercel and Local
+
+The same codebase works in both environments:
+
+| | Vercel (Cloud) | Docker (On-Prem) |
+|--|----------------|-------------------|
+| **API** | Serverless function (`api/index.ts`) | Express server (`server/src/index.ts`) |
+| **Database** | Vercel Postgres (Neon) | Local PostgreSQL container |
+| **Files** | Ephemeral `/tmp` (add Vercel Blob for persistence) | Local disk `./uploads` |
+| **HTTPS** | Automatic via Vercel | Caddy with local CA certs |
+| **Access** | Public URL (restrict via auth) | LAN only (optional VPN) |
+
+To move from Vercel demo to local production:
+1. Set up a local server with Docker
+2. Change `DATABASE_URL` to local Postgres
+3. Run `docker compose up -d`
+4. All your data schema and app code stays the same
 
 ## Documentation
 

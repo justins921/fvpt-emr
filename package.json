@@ -2,7 +2,7 @@
   "name": "fvpt-emr",
   "version": "0.1.0",
   "private": true,
-  "description": "Physical Therapy EMR - Local-first on-premises system",
+  "description": "Physical Therapy EMR - Vercel + local-first on-premises",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",

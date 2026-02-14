@@ -21,8 +21,18 @@ export const securityHeaders = helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true },
 });
 
+const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map(s => s.trim());
+
 export const corsMiddleware = cors({
-  origin: config.ALLOWED_ORIGINS.split(',').map(s => s.trim()),
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, curl, mobile apps)
+    if (!origin) return callback(null, true);
+    // Allow configured origins
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // On Vercel, allow any *.vercel.app preview deployments
+    if (process.env.VERCEL === '1' && origin.endsWith('.vercel.app')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
