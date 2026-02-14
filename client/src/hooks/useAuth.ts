@@ -4,7 +4,7 @@ import { api } from '../services/api';
 interface User {
   id: string;
   clinicId: string;
-  email: string;
+  username: string;
   firstName: string;
   lastName: string;
   role: string;
@@ -15,7 +15,7 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
@@ -25,8 +25,8 @@ export const useAuth = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
-  login: async (email: string, password: string) => {
-    const response = await api.post<{ success: boolean; data: { accessToken: string; refreshToken: string; user: User } }>('/auth/login', { email, password });
+  login: async (username: string, password: string) => {
+    const response = await api.post<{ success: boolean; data: { accessToken: string; refreshToken: string; user: User } }>('/auth/login', { username, password });
     if (response.success && response.data) {
       api.setTokens(response.data.accessToken, response.data.refreshToken);
       set({ user: response.data.user, isAuthenticated: true });

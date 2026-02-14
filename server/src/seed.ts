@@ -27,39 +27,39 @@ async function seed() {
     const adminHash = await hashPassword('password123!');
     const users = [
       // Owner / admin (also a PT)
-      { email: 'admin@clinic.local', firstName: 'Sarah', lastName: 'Mitchell', role: 'owner', credential: 'DPT', npi: '1234567890' },
+      { username: 'admin', firstName: 'Sarah', lastName: 'Mitchell', role: 'owner', credential: 'DPT', npi: '1234567890' },
       // Physical therapists (5 total including owner)
-      { email: 'mike.chen@clinic.local', firstName: 'Mike', lastName: 'Chen', role: 'therapist', credential: 'DPT', npi: '0987654321' },
-      { email: 'jessica.ruiz@clinic.local', firstName: 'Jessica', lastName: 'Ruiz', role: 'therapist', credential: 'PT', npi: '1122334455' },
-      { email: 'david.okafor@clinic.local', firstName: 'David', lastName: 'Okafor', role: 'therapist', credential: 'DPT', npi: '2233445566' },
-      { email: 'amanda.lee@clinic.local', firstName: 'Amanda', lastName: 'Lee', role: 'therapist', credential: 'PT', npi: '3344556677' },
+      { username: 'mchen', firstName: 'Mike', lastName: 'Chen', role: 'therapist', credential: 'DPT', npi: '0987654321' },
+      { username: 'jruiz', firstName: 'Jessica', lastName: 'Ruiz', role: 'therapist', credential: 'PT', npi: '1122334455' },
+      { username: 'dokafor', firstName: 'David', lastName: 'Okafor', role: 'therapist', credential: 'DPT', npi: '2233445566' },
+      { username: 'alee', firstName: 'Amanda', lastName: 'Lee', role: 'therapist', credential: 'PT', npi: '3344556677' },
       // Athletic trainer
-      { email: 'ryan.brooks@clinic.local', firstName: 'Ryan', lastName: 'Brooks', role: 'therapist', credential: 'ATC', npi: '4455667788' },
+      { username: 'rbrooks', firstName: 'Ryan', lastName: 'Brooks', role: 'therapist', credential: 'ATC', npi: '4455667788' },
       // PTAs (not scheduling providers — they work under a PT)
-      { email: 'carlos.vega@clinic.local', firstName: 'Carlos', lastName: 'Vega', role: 'therapist', credential: 'PTA', npi: '5566778899' },
-      { email: 'natalie.ward@clinic.local', firstName: 'Natalie', lastName: 'Ward', role: 'therapist', credential: 'PTA', npi: '6677889900' },
+      { username: 'cvega', firstName: 'Carlos', lastName: 'Vega', role: 'therapist', credential: 'PTA', npi: '5566778899' },
+      { username: 'nward', firstName: 'Natalie', lastName: 'Ward', role: 'therapist', credential: 'PTA', npi: '6677889900' },
       // Office staff
-      { email: 'frontdesk@clinic.local', firstName: 'Lisa', lastName: 'Nguyen', role: 'front_desk', credential: 'Office', npi: null },
-      { email: 'biller@clinic.local', firstName: 'Tom', lastName: 'Parker', role: 'biller', credential: 'Office', npi: null },
-      { email: 'receptionist2@clinic.local', firstName: 'Maria', lastName: 'Santos', role: 'front_desk', credential: 'Office', npi: null },
-      { email: 'readonly@clinic.local', firstName: 'Jane', lastName: 'Observer', role: 'read_only', credential: null, npi: null },
+      { username: 'lnguyen', firstName: 'Lisa', lastName: 'Nguyen', role: 'front_desk', credential: 'Office', npi: null },
+      { username: 'tparker', firstName: 'Tom', lastName: 'Parker', role: 'biller', credential: 'Office', npi: null },
+      { username: 'msantos', firstName: 'Maria', lastName: 'Santos', role: 'front_desk', credential: 'Office', npi: null },
+      { username: 'jobserver', firstName: 'Jane', lastName: 'Observer', role: 'read_only', credential: null, npi: null },
     ];
 
     const userIds: Record<string, string> = {};
     const therapistUserIds: string[] = []; // scheduling providers only
     for (const u of users) {
       const result = await client.query(`
-        INSERT INTO users (clinic_id, email, password_hash, first_name, last_name, role, credential, npi)
+        INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (clinic_id, email) DO UPDATE SET first_name = $4, credential = $7
+        ON CONFLICT (clinic_id, username) DO UPDATE SET first_name = $4, credential = $7
         RETURNING id
-      `, [clinicId, u.email, adminHash, u.firstName, u.lastName, u.role, u.credential, u.npi]);
-      userIds[u.email] = result.rows[0].id;
+      `, [clinicId, u.username, adminHash, u.firstName, u.lastName, u.role, u.credential, u.npi]);
+      userIds[u.username] = result.rows[0].id;
       // Track scheduling providers (PT, DPT, ATC — not PTA or Office)
       if (['PT', 'DPT', 'ATC'].includes(u.credential || '')) {
         therapistUserIds.push(result.rows[0].id);
       }
-      console.log(`User: ${u.email} (${u.role}, ${u.credential || 'none'})`);
+      console.log(`User: ${u.username} (${u.role}, ${u.credential || 'none'})`);
     }
 
     // Create FAKE patients
@@ -187,8 +187,8 @@ async function seed() {
     console.log('Claims and ledger entries created');
 
     console.log('\n=== Seed Complete ===');
-    console.log('Demo Login: admin@clinic.local / password123!');
-    console.log('Roles available: admin, therapist, frontdesk, biller, readonly (all same password)');
+    console.log('Demo Login: admin / password123!');
+    console.log('All users share the same password: password123!');
   } catch (err) {
     console.error('Seed failed:', err);
     throw err;

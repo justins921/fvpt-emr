@@ -51,7 +51,7 @@ function UsersManager() {
     const fd = new FormData(e.currentTarget);
     try {
       await api.post('/users', {
-        email: fd.get('email'), password: fd.get('password'),
+        username: fd.get('username'), password: fd.get('password'),
         firstName: fd.get('firstName'), lastName: fd.get('lastName'),
         role: fd.get('role'), credential: fd.get('credential') || null,
         npi: fd.get('npi') || undefined,
@@ -75,7 +75,7 @@ function UsersManager() {
       </div>
       {showForm && (
         <form onSubmit={handleCreate} className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <div><label className="label">Email *</label><input name="email" type="email" required className="input" /></div>
+          <div><label className="label">Username *</label><input name="username" type="text" required className="input" /></div>
           <div><label className="label">Password *</label><input name="password" type="password" required minLength={8} className="input" /></div>
           <div><label className="label">First Name *</label><input name="firstName" required className="input" /></div>
           <div><label className="label">Last Name *</label><input name="lastName" required className="input" /></div>
@@ -111,7 +111,7 @@ function UsersManager() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b"><tr>
             <th className="text-left px-4 py-3">Name</th>
-            <th className="text-left px-4 py-3">Email</th>
+            <th className="text-left px-4 py-3">Username</th>
             <th className="text-left px-4 py-3">Role</th>
             <th className="text-left px-4 py-3">Credential</th>
             <th className="text-left px-4 py-3">Status</th>
@@ -122,7 +122,7 @@ function UsersManager() {
             {users.map((u: any) => (
               <tr key={u.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium">{u.last_name}, {u.first_name}</td>
-                <td className="px-4 py-3">{u.email}</td>
+                <td className="px-4 py-3">{u.username}</td>
                 <td className="px-4 py-3 capitalize">{u.role.replace('_', ' ')}</td>
                 <td className="px-4 py-3">{u.credential ? <span className="badge-blue">{u.credential}</span> : <span className="text-slate-400">-</span>}</td>
                 <td className="px-4 py-3"><span className={u.is_active ? 'badge-green' : 'badge-red'}>{u.is_active ? 'Active' : 'Inactive'}</span></td>

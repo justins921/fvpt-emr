@@ -7,14 +7,14 @@ import { loginLimiter } from '../middleware/security';
 const router = Router();
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(1),
   password: z.string().min(8),
 });
 
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password } = loginSchema.parse(req.body);
-    const result = await login(email, password, req);
+    const { username, password } = loginSchema.parse(req.body);
+    const result = await login(username, password, req);
     if (!result) {
       res.status(401).json({ success: false, error: 'Invalid credentials' });
       return;
@@ -62,7 +62,7 @@ router.get('/me', authenticate, validateSession, async (req: Request, res: Respo
   try {
     const { query: dbQuery } = await import('../db');
     const result = await dbQuery(
-      `SELECT id, clinic_id, email, first_name, last_name, role, npi, license_number, is_active
+      `SELECT id, clinic_id, username, first_name, last_name, role, npi, license_number, is_active
        FROM users WHERE id = $1 AND clinic_id = $2`,
       [req.auth!.userId, req.auth!.clinicId]
     );
@@ -76,7 +76,7 @@ router.get('/me', authenticate, validateSession, async (req: Request, res: Respo
       data: {
         id: user.id,
         clinicId: user.clinic_id,
-        email: user.email,
+        username: user.username,
         firstName: user.first_name,
         lastName: user.last_name,
         role: user.role,

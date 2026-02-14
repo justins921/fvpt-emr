@@ -33,14 +33,14 @@ function hashToken(token: string): string {
 }
 
 export async function login(
-  email: string,
+  username: string,
   password: string,
   req: Request
 ): Promise<{ accessToken: string; refreshToken: string; user: Record<string, unknown> } | null> {
   const result = await query(
-    `SELECT id, clinic_id, email, password_hash, first_name, last_name, role, is_active, npi
-     FROM users WHERE email = $1`,
-    [email]
+    `SELECT id, clinic_id, username, password_hash, first_name, last_name, role, is_active, npi
+     FROM users WHERE username = $1`,
+    [username]
   );
 
   if (result.rows.length === 0) {
@@ -124,7 +124,7 @@ export async function login(
     user: {
       id: user.id,
       clinicId: user.clinic_id,
-      email: user.email,
+      username: user.username,
       firstName: user.first_name,
       lastName: user.last_name,
       role: user.role,

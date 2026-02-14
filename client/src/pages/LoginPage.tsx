@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -13,7 +13,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(username, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -40,16 +40,16 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="label">Email</label>
+            <label htmlFor="username" className="label">Username</label>
             <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               className="input"
-              placeholder="admin@clinic.local"
+              placeholder="admin"
               required
-              autoComplete="email"
+              autoComplete="username"
             />
           </div>
 
@@ -72,7 +72,7 @@ export default function LoginPage() {
           </button>
 
           <p className="text-xs text-slate-400 text-center mt-4">
-            Demo: admin@clinic.local / password123!
+            Demo: admin / password123!
           </p>
         </form>
 

@@ -12,7 +12,7 @@ router.use(authenticate, validateSession, tenantScope);
 const VALID_CREDENTIALS = ['PT', 'DPT', 'PTA', 'ATC', 'OT', 'SLP', 'MD', 'DO', 'NP', 'PA', 'Office'] as const;
 
 const createUserSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(1).max(100),
   password: z.string().min(8).max(128),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
@@ -26,7 +26,7 @@ const createUserSchema = z.object({
 router.get('/', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, role, credential, npi, license_number, is_active, last_login, created_at
+      `SELECT id, username, first_name, last_name, role, credential, npi, license_number, is_active, last_login, created_at
        FROM users WHERE clinic_id = $1 ORDER BY last_name, first_name`,
       [req.auth!.clinicId]
     );
@@ -47,9 +47,9 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
     }
     const passwordHash = await hashPassword(input.password);
     const result = await query(
-      `INSERT INTO users (clinic_id, email, password_hash, first_name, last_name, role, credential, npi, license_number)
+      `INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi, license_number)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [req.auth!.clinicId, input.email, passwordHash, input.firstName, input.lastName, input.role, input.credential || null, input.npi || null, input.licenseNumber || null]
+      [req.auth!.clinicId, input.username, passwordHash, input.firstName, input.lastName, input.role, input.credential || null, input.npi || null, input.licenseNumber || null]
     );
     await logAudit({
       clinicId: req.auth!.clinicId,
@@ -68,7 +68,7 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
     }
     const pgErr = err as { code?: string };
     if (pgErr.code === '23505') {
-      res.status(409).json({ success: false, error: 'Email already exists in this clinic' });
+      res.status(409).json({ success: false, error: 'Username already exists in this clinic' });
       return;
     }
     res.status(500).json({ success: false, error: 'Internal server error' });
@@ -79,7 +79,7 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
 router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, role, credential, npi, license_number, is_active, mfa_enabled, last_login, created_at
+      `SELECT id, username, first_name, last_name, role, credential, npi, license_number, is_active, mfa_enabled, last_login, created_at
        FROM users WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
@@ -107,7 +107,7 @@ router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request,
         license_number = COALESCE($8, license_number),
         is_active = COALESCE($9, is_active)
        WHERE id = $1 AND clinic_id = $2
-       RETURNING id, email, first_name, last_name, role, credential, is_active`,
+       RETURNING id, username, first_name, last_name, role, credential, is_active`,
       [req.params.id, req.auth!.clinicId, firstName, lastName, role, credential, npi, licenseNumber, isActive]
     );
     if (result.rows.length === 0) {

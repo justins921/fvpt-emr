@@ -169,7 +169,7 @@ export const SCHEDULING_CREDENTIALS: Credential[] = ['PT', 'DPT', 'ATC'];
 export interface User {
   id: string;
   clinic_id: string;
-  email: string;
+  username: string;
   password_hash: string;
   first_name: string;
   last_name: string;

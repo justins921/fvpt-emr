@@ -121,7 +121,7 @@ export async function getAuditLog(
   );
 
   const result = await query(
-    `SELECT ae.*, u.first_name, u.last_name, u.email
+    `SELECT ae.*, u.first_name, u.last_name, u.username
      FROM audit_events ae
      LEFT JOIN users u ON ae.user_id = u.id
      WHERE ${where}
