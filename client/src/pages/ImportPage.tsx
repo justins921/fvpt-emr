@@ -17,14 +17,39 @@ interface ImportResult {
 }
 
 type Step = 'upload' | 'preview' | 'importing' | 'done';
+type ImportType = 'patients' | 'appointments';
+
+const TYPE_INFO: Record<ImportType, { label: string; description: string; instructions: string[] }> = {
+  patients: {
+    label: 'Patients',
+    description: 'Import patient demographics, contact info, insurance, and diagnoses',
+    instructions: [
+      'In Practice Perfect, go to <strong>Reports</strong> > <strong>Client Listing</strong>',
+      'Select the fields you want to export (name, DOB, phone, etc.)',
+      'Click <strong>Export</strong> and save as CSV',
+      'Upload the CSV file here',
+    ],
+  },
+  appointments: {
+    label: 'Schedule / Appointments',
+    description: 'Import appointment history. Patients must be imported first so they can be matched.',
+    instructions: [
+      'In Practice Perfect, go to <strong>Reports</strong> > <strong>Appointment Listing</strong>',
+      'Include: Date, Time, Patient Name, Therapist, Type, and Status',
+      'Click <strong>Export</strong> and save as CSV',
+      'Upload the CSV file here (import patients first!)',
+    ],
+  },
+};
 
 export default function ImportPage() {
+  const [importType, setImportType] = useState<ImportType>('patients');
   const [step, setStep] = useState<Step>('upload');
   const [csvData, setCsvData] = useState('');
-  const [fileName, setFileName] = useState('');
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [duplicateHandling, setDuplicateHandling] = useState('skip');
+  const [defaultDuration, setDefaultDuration] = useState(45);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -33,16 +58,14 @@ export default function ImportPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setFileName(file.name);
     setError('');
 
     const text = await file.text();
     setCsvData(text);
 
-    // Auto-preview
     setLoading(true);
     try {
-      const res = await api.post<any>('/import/preview', { csv: text, type: 'patients' });
+      const res = await api.post<any>('/import/preview', { csv: text, type: importType });
       setPreview(res.data);
       setStep('preview');
     } catch (err) {
@@ -56,7 +79,11 @@ export default function ImportPage() {
     setStep('importing');
     setError('');
     try {
-      const res = await api.post<any>('/import/patients', { csv: csvData, duplicateHandling });
+      const endpoint = importType === 'patients' ? '/import/patients' : '/import/appointments';
+      const body: Record<string, unknown> = { csv: csvData };
+      if (importType === 'patients') body.duplicateHandling = duplicateHandling;
+      if (importType === 'appointments') body.defaultDuration = defaultDuration;
+      const res = await api.post<any>(endpoint, body);
       setResult(res.data);
       setStep('done');
     } catch (err) {
@@ -68,50 +95,67 @@ export default function ImportPage() {
   function reset() {
     setStep('upload');
     setCsvData('');
-    setFileName('');
     setPreview(null);
     setResult(null);
     setError('');
     if (fileRef.current) fileRef.current.value = '';
   }
 
-  async function downloadTemplate() {
-    try {
-      const res = await fetch('/api/import/template/patients', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'emr_os_patient_import_template.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // Template download via API may require auth token from the api client;
-      // fallback: build template client-side
-      const headers = 'First Name,Last Name,Date of Birth,Gender,Phone,Email,Address,City,State,Zip,Emergency Contact,Emergency Phone,Primary Diagnosis,Referring Provider,Referral Source,Insurance,Member ID,Group Number,MRN,Status\n';
-      const blob = new Blob([headers], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'emr_os_patient_import_template.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  function downloadTemplate(type: ImportType) {
+    const templates: Record<ImportType, { filename: string; headers: string }> = {
+      patients: {
+        filename: 'emr_os_patient_import_template.csv',
+        headers: 'First Name,Last Name,Date of Birth,Gender,Phone,Email,Address,City,State,Zip,Emergency Contact,Emergency Phone,Primary Diagnosis,Referring Provider,Referral Source,Insurance,Member ID,Group Number,MRN,Status',
+      },
+      appointments: {
+        filename: 'emr_os_appointment_import_template.csv',
+        headers: 'Appointment Date,Start Time,End Time,Duration,Patient First Name,Patient Last Name,MRN,Therapist,Appointment Type,Status,Notes',
+      },
+    };
+    const t = templates[type];
+    const blob = new Blob([t.headers + '\n'], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = t.filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
+
+  const info = TYPE_INFO[importType];
+  const itemLabel = importType === 'patients' ? 'Patient' : 'Appointment';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Import from Practice Perfect</h2>
-          <p className="text-sm text-slate-500 mt-1">Import patient data from a Practice Perfect CSV export</p>
+          <p className="text-sm text-slate-500 mt-1">Import data from a Practice Perfect CSV export</p>
         </div>
-        <button onClick={downloadTemplate} className="btn-secondary text-sm">
-          Download CSV Template
+        <button onClick={() => downloadTemplate(importType)} className="btn-secondary text-sm">
+          Download Template
         </button>
       </div>
+
+      {/* Import type selector */}
+      {step === 'upload' && (
+        <div className="flex gap-3">
+          {(Object.keys(TYPE_INFO) as ImportType[]).map(type => (
+            <button
+              key={type}
+              onClick={() => { setImportType(type); reset(); }}
+              className={`flex-1 p-4 rounded-lg border-2 text-left transition-colors ${
+                importType === type
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="font-medium text-sm">{TYPE_INFO[type].label}</div>
+              <div className="text-xs text-slate-500 mt-1">{TYPE_INFO[type].description}</div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -122,9 +166,9 @@ export default function ImportPage() {
       {/* Step 1: Upload */}
       {step === 'upload' && (
         <div className="card">
-          <h3 className="font-semibold mb-4">Step 1: Upload CSV File</h3>
+          <h3 className="font-semibold mb-4">Step 1: Upload {info.label} CSV</h3>
           <p className="text-sm text-slate-500 mb-4">
-            Export your patient list from Practice Perfect as a CSV file, then upload it here.
+            Export your {info.label.toLowerCase()} from Practice Perfect as a CSV file, then upload it here.
             The importer automatically maps Practice Perfect column names to EMR OS fields.
           </p>
           <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
@@ -152,10 +196,9 @@ export default function ImportPage() {
           <div className="mt-6 bg-slate-50 rounded-lg p-4">
             <h4 className="font-medium text-sm mb-2">How to export from Practice Perfect</h4>
             <ol className="text-sm text-slate-600 space-y-1 list-decimal list-inside">
-              <li>In Practice Perfect, go to <strong>Reports</strong> &gt; <strong>Client Listing</strong></li>
-              <li>Select the fields you want to export (name, DOB, phone, etc.)</li>
-              <li>Click <strong>Export</strong> and save as CSV</li>
-              <li>Upload the CSV file here</li>
+              {info.instructions.map((text, i) => (
+                <li key={i} dangerouslySetInnerHTML={{ __html: text }} />
+              ))}
             </ol>
           </div>
         </div>
@@ -249,20 +292,38 @@ export default function ImportPage() {
           <div className="card">
             <h4 className="font-medium mb-3">Import Options</h4>
             <div className="space-y-3">
-              <div>
-                <label className="label">Duplicate Handling</label>
-                <p className="text-xs text-slate-400 mb-1">
-                  When a patient with the same name and DOB already exists:
-                </p>
-                <select
-                  value={duplicateHandling}
-                  onChange={e => setDuplicateHandling(e.target.value)}
-                  className="input max-w-xs"
-                >
-                  <option value="skip">Skip duplicates</option>
-                  <option value="update">Update existing records</option>
-                </select>
-              </div>
+              {importType === 'patients' && (
+                <div>
+                  <label className="label">Duplicate Handling</label>
+                  <p className="text-xs text-slate-400 mb-1">
+                    When a patient with the same name and DOB already exists:
+                  </p>
+                  <select
+                    value={duplicateHandling}
+                    onChange={e => setDuplicateHandling(e.target.value)}
+                    className="input max-w-xs"
+                  >
+                    <option value="skip">Skip duplicates</option>
+                    <option value="update">Update existing records</option>
+                  </select>
+                </div>
+              )}
+              {importType === 'appointments' && (
+                <div>
+                  <label className="label">Default Appointment Duration (minutes)</label>
+                  <p className="text-xs text-slate-400 mb-1">
+                    Used when no end time or duration is provided in the CSV:
+                  </p>
+                  <input
+                    type="number"
+                    value={defaultDuration}
+                    onChange={e => setDefaultDuration(parseInt(e.target.value, 10) || 45)}
+                    min={5}
+                    max={480}
+                    className="input max-w-[120px]"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -274,7 +335,7 @@ export default function ImportPage() {
                 disabled={preview.validRows === 0}
                 className="btn-primary"
               >
-                Import {preview.validRows} Patient{preview.validRows !== 1 ? 's' : ''}
+                Import {preview.validRows} {itemLabel}{preview.validRows !== 1 ? 's' : ''}
               </button>
             </div>
           </div>
@@ -285,7 +346,7 @@ export default function ImportPage() {
       {step === 'importing' && (
         <div className="card text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <div className="font-medium">Importing patients...</div>
+          <div className="font-medium">Importing {info.label.toLowerCase()}...</div>
           <p className="text-sm text-slate-500 mt-1">This may take a moment for large files.</p>
         </div>
       )}
@@ -326,31 +387,48 @@ export default function ImportPage() {
 
           <div className="flex gap-3">
             <button onClick={reset} className="btn-secondary">Import More</button>
-            <a href="/patients" className="btn-primary inline-flex items-center">View Patients</a>
+            <a href={importType === 'patients' ? '/patients' : '/schedule'} className="btn-primary inline-flex items-center">
+              View {info.label}
+            </a>
           </div>
         </div>
       )}
 
-      {/* Info box */}
+      {/* Supported fields info */}
       <div className="card bg-blue-50 border-blue-200">
-        <h4 className="font-medium text-blue-900 mb-2">Supported Fields</h4>
+        <h4 className="font-medium text-blue-900 mb-2">Supported Fields — {info.label}</h4>
         <p className="text-sm text-blue-800 mb-2">
           The importer automatically recognizes column headers from Practice Perfect exports:
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">
-          <span>First Name / Last Name</span>
-          <span>Date of Birth / DOB</span>
-          <span>Gender / Sex</span>
-          <span>Phone / Cell Phone</span>
-          <span>Email</span>
-          <span>Address / City / State / Zip</span>
-          <span>Emergency Contact</span>
-          <span>Diagnosis / ICD-10</span>
-          <span>Referring Provider</span>
-          <span>Insurance / Payer</span>
-          <span>Member ID / Policy #</span>
-          <span>Group Number</span>
-        </div>
+        {importType === 'patients' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">
+            <span>First Name / Last Name</span>
+            <span>Date of Birth / DOB</span>
+            <span>Gender / Sex</span>
+            <span>Phone / Cell Phone</span>
+            <span>Email</span>
+            <span>Address / City / State / Zip</span>
+            <span>Emergency Contact</span>
+            <span>Diagnosis / ICD-10</span>
+            <span>Referring Provider</span>
+            <span>Insurance / Payer</span>
+            <span>Member ID / Policy #</span>
+            <span>Group Number</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">
+            <span>Date / Appointment Date</span>
+            <span>Start Time / Time</span>
+            <span>End Time / Duration</span>
+            <span>Patient Name / Client Name</span>
+            <span>Patient First/Last Name</span>
+            <span>MRN / Client ID</span>
+            <span>Therapist / Provider</span>
+            <span>Appointment Type / Visit Type</span>
+            <span>Status</span>
+            <span>Notes / Comments</span>
+          </div>
+        )}
       </div>
     </div>
   );
