@@ -57,6 +57,10 @@ class ApiClient {
           headers: reqHeaders,
           body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
         });
+        if (!retryResponse.ok) {
+          const retryError = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
+          throw new ApiError(retryResponse.status, retryError.error || 'Request failed', retryError.details);
+        }
         return retryResponse.json();
       }
     }

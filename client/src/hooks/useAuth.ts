@@ -30,6 +30,8 @@ export const useAuth = create<AuthState>((set) => ({
     if (response.success && response.data) {
       api.setTokens(response.data.accessToken, response.data.refreshToken);
       set({ user: response.data.user, isAuthenticated: true });
+    } else {
+      throw new Error(response.success === false ? 'Login failed' : 'Unexpected response');
     }
   },
 
