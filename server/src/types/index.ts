@@ -2,6 +2,7 @@
 export enum Role {
   OWNER = 'owner',
   ADMIN = 'admin',
+  DEV = 'dev',
   THERAPIST = 'therapist',
   FRONT_DESK = 'front_desk',
   BILLER = 'biller',
@@ -61,6 +62,10 @@ export enum Permission {
   // Import
   DATA_IMPORT = 'data:import',
 
+  // Support
+  SUPPORT_CREATE = 'support:create',
+  SUPPORT_MANAGE = 'support:manage',
+
   // Admin
   BACKUP_MANAGE = 'backup:manage',
   SETTINGS_MANAGE = 'settings:manage',
@@ -69,6 +74,7 @@ export enum Permission {
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.OWNER]: Object.values(Permission),
   [Role.ADMIN]: Object.values(Permission),
+  [Role.DEV]: Object.values(Permission),
   [Role.THERAPIST]: [
     Permission.CLINIC_VIEW,
     Permission.PATIENT_CREATE,
@@ -86,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.ATTACHMENT_VIEW,
     Permission.BILLING_VIEW,
     Permission.USER_VIEW,
+    Permission.SUPPORT_CREATE,
   ],
   [Role.FRONT_DESK]: [
     Permission.CLINIC_VIEW,
@@ -100,6 +107,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.ATTACHMENT_VIEW,
     Permission.BILLING_VIEW,
     Permission.USER_VIEW,
+    Permission.SUPPORT_CREATE,
   ],
   [Role.BILLER]: [
     Permission.CLINIC_VIEW,
@@ -117,6 +125,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.LEDGER_VIEW,
     Permission.LEDGER_EDIT,
     Permission.USER_VIEW,
+    Permission.SUPPORT_CREATE,
   ],
   [Role.READ_ONLY]: [
     Permission.CLINIC_VIEW,
@@ -128,6 +137,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.CLAIM_VIEW,
     Permission.LEDGER_VIEW,
     Permission.USER_VIEW,
+    Permission.SUPPORT_CREATE,
   ],
 };
 
@@ -470,6 +480,10 @@ export enum AuditAction {
 
   // Import
   DATA_IMPORT = 'data.import',
+
+  // Support
+  SUPPORT_CREATE = 'support.create',
+  SUPPORT_UPDATE = 'support.update',
 
   // Admin
   USER_CREATE = 'user.create',

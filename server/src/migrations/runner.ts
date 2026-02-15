@@ -18,6 +18,7 @@ async function run() {
       { name: '001_initial_schema', module: await import('./001_initial_schema') },
       { name: '002_add_credential_to_users', module: await import('./002_add_credential_to_users') },
       { name: '003_email_to_username', module: await import('./003_email_to_username') },
+      { name: '004_add_dev_role_and_support', module: await import('./004_add_dev_role_and_support') },
     ];
 
     if (direction === 'up') {

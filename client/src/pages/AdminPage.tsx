@@ -14,7 +14,7 @@ export default function AdminPage() {
     { path: '/admin/import', label: 'Import Data' },
   ];
 
-  if (!['owner', 'admin'].includes(user?.role || '')) {
+  if (!['owner', 'admin', 'dev'].includes(user?.role || '')) {
     return <div className="card text-center py-8 text-slate-500">Access restricted to administrators</div>;
   }
 
@@ -89,6 +89,7 @@ function UsersManager() {
               <option value="biller">Biller</option>
               <option value="read_only">Read Only</option>
               <option value="admin">Admin</option>
+              <option value="dev">Developer</option>
             </select>
           </div>
           <div><label className="label">Credential</label>
