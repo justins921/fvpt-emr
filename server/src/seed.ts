@@ -188,6 +188,34 @@ async function seed() {
     }
     console.log('Claims and ledger entries created');
 
+    // Create default SMS templates
+    const adminUserId = userIds['admin'];
+    const smsTemplates = [
+      {
+        name: 'Appointment Reminder',
+        body: 'Hi {{first_name}}, this is a reminder about your appointment on {{appointment_date}} at {{appointment_time}}. Please call {{clinic_phone}} if you need to reschedule. - {{clinic_name}}',
+        type: 'reminder',
+      },
+      {
+        name: 'Happy Birthday',
+        body: 'Happy Birthday, {{first_name}}! Wishing you a wonderful day from all of us at {{clinic_name}}.',
+        type: 'birthday',
+      },
+      {
+        name: 'Follow-up Check-in',
+        body: 'Hi {{first_name}}, just checking in to see how you\'re doing after your recent visit. If you have any questions, please call us at {{clinic_phone}}. - {{clinic_name}}',
+        type: 'follow_up',
+      },
+    ];
+    for (const tmpl of smsTemplates) {
+      await client.query(`
+        INSERT INTO sms_templates (clinic_id, name, body, template_type, created_by)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT DO NOTHING
+      `, [clinicId, tmpl.name, tmpl.body, tmpl.type, adminUserId]);
+    }
+    console.log('SMS templates created');
+
     console.log('\n=== Seed Complete ===');
     console.log('Demo Login: admin / password123!');
     console.log('All users share the same password: password123!');

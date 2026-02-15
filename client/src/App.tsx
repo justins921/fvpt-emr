@@ -12,6 +12,7 @@ import SchedulePage from './pages/SchedulePage';
 import BillingPage from './pages/BillingPage';
 import AdminPage from './pages/AdminPage';
 import SupportPage from './pages/SupportPage';
+import MessagingPage from './pages/MessagingPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="patients/:id/*" element={<PatientChartPage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="billing/*" element={<BillingPage />} />
+        <Route path="messages" element={<MessagingPage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="admin/*" element={<AdminPage />} />
       </Route>

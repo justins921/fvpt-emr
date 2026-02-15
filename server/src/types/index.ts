@@ -66,6 +66,11 @@ export enum Permission {
   SUPPORT_CREATE = 'support:create',
   SUPPORT_MANAGE = 'support:manage',
 
+  // Messaging
+  MESSAGING_VIEW = 'messaging:view',
+  MESSAGING_SEND = 'messaging:send',
+  MESSAGING_MANAGE = 'messaging:manage',
+
   // Admin
   BACKUP_MANAGE = 'backup:manage',
   SETTINGS_MANAGE = 'settings:manage',
@@ -93,6 +98,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.BILLING_VIEW,
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
+    Permission.MESSAGING_VIEW,
+    Permission.MESSAGING_SEND,
   ],
   [Role.FRONT_DESK]: [
     Permission.CLINIC_VIEW,
@@ -108,6 +115,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.BILLING_VIEW,
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
+    Permission.MESSAGING_VIEW,
+    Permission.MESSAGING_SEND,
   ],
   [Role.BILLER]: [
     Permission.CLINIC_VIEW,
@@ -126,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.LEDGER_EDIT,
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
+    Permission.MESSAGING_VIEW,
   ],
   [Role.READ_ONLY]: [
     Permission.CLINIC_VIEW,
@@ -138,6 +148,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.LEDGER_VIEW,
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
+    Permission.MESSAGING_VIEW,
   ],
 };
 
@@ -484,6 +495,13 @@ export enum AuditAction {
   // Support
   SUPPORT_CREATE = 'support.create',
   SUPPORT_UPDATE = 'support.update',
+
+  // Messaging
+  SMS_SEND = 'sms.send',
+  SMS_BULK_SEND = 'sms.bulk_send',
+  SMS_TEMPLATE_CREATE = 'sms.template_create',
+  SMS_TEMPLATE_UPDATE = 'sms.template_update',
+  SMS_TEMPLATE_DELETE = 'sms.template_delete',
 
   // Admin
   USER_CREATE = 'user.create',

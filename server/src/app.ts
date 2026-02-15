@@ -16,6 +16,7 @@ import dictationRoutes from './routes/dictation';
 import exportRoutes from './routes/exports';
 import importRoutes from './routes/import';
 import supportRoutes from './routes/support';
+import messagingRoutes from './routes/messaging';
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/dictation', dictationRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/messaging', messagingRoutes);
 
 // 404 handler for API routes
 app.use('/api', (_req, res) => {

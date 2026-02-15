@@ -33,6 +33,11 @@ const envSchema = z.object({
   IP_ALLOWLIST: z.string().default(''), // empty = allow all
   TRUST_PROXY: z.coerce.boolean().default(process.env.VERCEL === '1' ? true : false),
 
+  // SMS / Twilio (optional — messaging features degrade gracefully when not set)
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+
   // Logging (NO PHI in logs)
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });

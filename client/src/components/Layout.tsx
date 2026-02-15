@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { path: '/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
   { path: '/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
   { path: '/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
+  { path: '/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
   { path: '/support', label: 'Support', icon: '?', shortcut: '' },
   { path: '/admin', label: 'Admin', icon: '⚙', shortcut: '' },
 ];
