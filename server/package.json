@@ -1,5 +1,5 @@
 {
-  "name": "fvpt-emr-server",
+  "name": "emr-os-server",
   "version": "0.1.0",
   "private": true,
   "scripts": {

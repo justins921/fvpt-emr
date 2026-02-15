@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api, ApiError } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import ImportPage from './ImportPage';
 
 export default function AdminPage() {
   const location = useLocation();
@@ -10,6 +11,7 @@ export default function AdminPage() {
     { path: '/admin', label: 'Users' },
     { path: '/admin/audit', label: 'Audit Log' },
     { path: '/admin/settings', label: 'Settings' },
+    { path: '/admin/import', label: 'Import Data' },
   ];
 
   if (!['owner', 'admin'].includes(user?.role || '')) {
@@ -30,6 +32,7 @@ export default function AdminPage() {
         <Route index element={<UsersManager />} />
         <Route path="audit" element={<AuditViewer />} />
         <Route path="settings" element={<SettingsPanel />} />
+        <Route path="import" element={<ImportPage />} />
       </Routes>
     </div>
   );

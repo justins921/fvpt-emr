@@ -9,7 +9,7 @@ async function seed() {
     // Create demo clinic
     const clinicResult = await client.query(`
       INSERT INTO clinics (name, npi, tax_id, address_line1, city, state, zip, phone)
-      VALUES ('Fictional Valley Physical Therapy', '1234567890', '12-3456789', '100 Demo Street', 'Faketown', 'CA', '90210', '555-0100')
+      VALUES ('Sobojinski Solutions Demo Clinic', '1234567890', '12-3456789', '100 Demo Street', 'Faketown', 'CA', '90210', '555-0100')
       ON CONFLICT DO NOTHING
       RETURNING id
     `);

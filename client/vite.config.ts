@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'FVPT EMR',
-        short_name: 'EMR',
-        description: 'Physical Therapy EMR System',
+        name: 'EMR OS',
+        short_name: 'EMR OS',
+        description: 'EMR OS by Sobojinski Solutions',
         theme_color: '#1e40af',
         background_color: '#f8fafc',
         display: 'standalone',

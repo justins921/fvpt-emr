@@ -30,10 +30,10 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-primary-800">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-primary-900 font-bold text-sm">PT</div>
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-primary-900 font-bold text-sm">OS</div>
           <div>
-            <div className="font-semibold text-sm">FVPT EMR</div>
-            <div className="text-xs text-primary-300">Local System</div>
+            <div className="font-semibold text-sm">EMR OS</div>
+            <div className="text-xs text-primary-300">Sobojinski Solutions</div>
           </div>
         </div>
 

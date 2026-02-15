@@ -58,6 +58,9 @@ export enum Permission {
   // Audit
   AUDIT_VIEW = 'audit:view',
 
+  // Import
+  DATA_IMPORT = 'data:import',
+
   // Admin
   BACKUP_MANAGE = 'backup:manage',
   SETTINGS_MANAGE = 'settings:manage',
@@ -464,6 +467,9 @@ export enum AuditAction {
   CLAIM_EDIT = 'claim.edit',
   ERA_IMPORT = 'era.import',
   ERA_POST = 'era.post',
+
+  // Import
+  DATA_IMPORT = 'data.import',
 
   // Admin
   USER_CREATE = 'user.create',

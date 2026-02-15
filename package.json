@@ -1,8 +1,8 @@
 {
-  "name": "fvpt-emr",
+  "name": "emr-os",
   "version": "0.1.0",
   "private": true,
-  "description": "Physical Therapy EMR - Vercel + local-first on-premises",
+  "description": "EMR OS by Sobojinski Solutions",
   "workspaces": [
     "server",
     "client"

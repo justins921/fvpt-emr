@@ -8,7 +8,7 @@ const isVercel = process.env.VERCEL === '1';
 
 if (!isVercel) {
   const server = app.listen(config.PORT, config.HOST, () => {
-    console.log(`FVPT-EMR server running on ${config.HOST}:${config.PORT}`);
+    console.log(`EMR OS server running on ${config.HOST}:${config.PORT}`);
     console.log(`Environment: ${config.NODE_ENV}`);
     console.log(`CORS origins: ${config.ALLOWED_ORIGINS}`);
   });
