@@ -53,7 +53,7 @@ async function seed() {
       const result = await client.query(`
         INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (clinic_id, username) DO UPDATE SET first_name = $4, credential = $7
+        ON CONFLICT (clinic_id, username) DO UPDATE SET first_name = $4, last_name = $5, role = $6, credential = $7, npi = $8
         RETURNING id
       `, [clinicId, u.username, adminHash, u.firstName, u.lastName, u.role, u.credential, u.npi]);
       userIds[u.username] = result.rows[0].id;
