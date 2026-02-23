@@ -8,7 +8,7 @@ const TIERS = [
     price: 149,
     period: '/provider/mo',
     description: 'Everything a solo practitioner needs to run a modern PT clinic.',
-    cta: 'Start Free Trial',
+    cta: 'Request a Demo',
     highlight: false,
     features: [
       'Scheduling & calendar',
@@ -26,7 +26,7 @@ const TIERS = [
     price: 249,
     period: '/provider/mo',
     description: 'For growing clinics that need advanced workflows and automation.',
-    cta: 'Start Free Trial',
+    cta: 'Request a Demo',
     highlight: true,
     features: [
       'Everything in Starter, plus:',
@@ -150,7 +150,11 @@ const FAQS = [
   },
   {
     q: 'Is there a long-term contract?',
-    a: 'No contracts. EMR OS is month-to-month. You can cancel anytime — though with a 97% retention rate, most clinics stay for years.',
+    a: 'No contracts. EMR OS is month-to-month. You can cancel anytime with 30 days notice — though with a 97% retention rate, most clinics stay for years.',
+  },
+  {
+    q: 'Can I try EMR OS before committing?',
+    a: 'Yes! Request a demo and we\'ll give you a personalized walkthrough of the platform. We can also set up a sandbox environment so your team can explore it hands-on before making a decision.',
   },
   {
     q: 'How long does setup take?',
@@ -249,7 +253,7 @@ export default function LandingPage() {
                 href="#demo"
                 className="w-full sm:w-auto bg-primary-600 text-white font-semibold px-8 py-3.5 rounded-xl text-base hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/25"
               >
-                Start Free 30-Day Trial
+                Request a Demo
               </a>
               <a
                 href="#features"
@@ -261,7 +265,7 @@ export default function LandingPage() {
 
             {/* Micro-copy: reduce friction (Signup Flow CRO) */}
             <p className="mt-4 text-sm text-slate-400">
-              No credit card required &middot; Free migration &middot; Cancel anytime
+              See it in action &middot; Free migration &middot; No commitment
             </p>
           </div>
 
@@ -512,13 +516,13 @@ export default function LandingPage() {
                 Ready to modernize your clinic?
               </h2>
               <p className="mt-4 text-primary-100 text-lg leading-relaxed">
-                Start your free 30-day trial today. No credit card, no commitment.
-                Your data migrates in days, not weeks.
+                See EMR OS in action with a live demo. We&apos;ll walk you through the
+                platform and show you exactly how it fits your workflow.
               </p>
               <div className="mt-6 space-y-3 text-sm text-primary-200">
                 <div className="flex items-center gap-2">
                   <span className="text-primary-300">&#10003;</span>
-                  <span>Full access to all features during trial</span>
+                  <span>Personalized walkthrough of the full platform</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-primary-300">&#10003;</span>
@@ -530,7 +534,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-primary-300">&#10003;</span>
-                  <span>Cancel anytime — no questions asked</span>
+                  <span>No obligation — just a conversation</span>
                 </div>
               </div>
             </div>
@@ -538,14 +542,14 @@ export default function LandingPage() {
               {demoSubmitted ? (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-4">&#10003;</div>
-                  <h3 className="text-xl font-bold text-slate-900">You&apos;re in!</h3>
+                  <h3 className="text-xl font-bold text-slate-900">We&apos;ll be in touch!</h3>
                   <p className="text-slate-500 mt-2 text-sm">
-                    We&apos;ll send your trial access to <strong>{demoEmail}</strong> within 5 minutes.
+                    Expect a personalized demo invitation at <strong>{demoEmail}</strong> within one business day.
                   </p>
                 </div>
               ) : (
                 <form onSubmit={handleDemoSubmit}>
-                  <h3 className="text-lg font-bold mb-4">Start your free trial</h3>
+                  <h3 className="text-lg font-bold mb-4">Request a demo</h3>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Work email</label>
@@ -581,11 +585,11 @@ export default function LandingPage() {
                       type="submit"
                       className="w-full bg-primary-600 text-white font-semibold py-3 rounded-xl hover:bg-primary-700 transition-colors mt-2"
                     >
-                      Start Free Trial
+                      Request a Demo
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 text-center mt-3">
-                    No credit card required &middot; Setup in minutes
+                    Usually responds within one business day
                   </p>
                 </form>
               )}
@@ -616,7 +620,7 @@ export default function LandingPage() {
                 <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
                 <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
                 <li><a href="#compare" className="hover:text-white transition-colors">Compare</a></li>
-                <li><a href="#demo" className="hover:text-white transition-colors">Free Trial</a></li>
+                <li><a href="#demo" className="hover:text-white transition-colors">Request Demo</a></li>
               </ul>
             </div>
             <div>
