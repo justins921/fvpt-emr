@@ -2,50 +2,53 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-const NAV_SECTIONS = [
+/* ── Primary nav: always visible ── */
+const PRIMARY_NAV = [
+  { path: '/app', label: 'Dashboard', icon: '□' },
+  { path: '/app/schedule', label: 'Schedule', icon: '▦' },
+  { path: '/app/patients', label: 'Patients', icon: '♦' },
+  { path: '/app/billing', label: 'Billing', icon: '$' },
+  { path: '/app/messages', label: 'Messages', icon: '✉' },
+];
+
+/* ── Collapsible sections ── */
+const SECTIONS = [
   {
-    label: 'Core',
-    items: [
-      { path: '/app', label: 'Dashboard', icon: '□', shortcut: 'Alt+H' },
-      { path: '/app/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
-      { path: '/app/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
-      { path: '/app/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
-      { path: '/app/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
-    ],
-  },
-  {
+    key: 'clinical',
     label: 'Clinical',
     items: [
-      { path: '/app/exercises', label: 'Exercises / HEP', icon: '⚡', shortcut: '' },
-      { path: '/app/outcome-measures', label: 'Outcomes', icon: '◎', shortcut: '' },
-      { path: '/app/telehealth', label: 'Telehealth', icon: '◉', shortcut: '' },
-      { path: '/app/intake-forms', label: 'Intake Forms', icon: '✎', shortcut: '' },
+      { path: '/app/exercises', label: 'Exercises / HEP', icon: '⚡' },
+      { path: '/app/outcome-measures', label: 'Outcomes', icon: '◎' },
+      { path: '/app/telehealth', label: 'Telehealth', icon: '◉' },
+      { path: '/app/intake-forms', label: 'Intake Forms', icon: '✎' },
     ],
   },
   {
+    key: 'operations',
     label: 'Operations',
     items: [
-      { path: '/app/tasks', label: 'Tasks', icon: '☑', shortcut: '' },
-      { path: '/app/waitlist', label: 'Waitlist', icon: '⏳', shortcut: '' },
-      { path: '/app/authorizations', label: 'Authorizations', icon: '✓', shortcut: '' },
-      { path: '/app/eligibility', label: 'Eligibility', icon: '⚕', shortcut: '' },
-      { path: '/app/referring-providers', label: 'Ref. Providers', icon: '⇋', shortcut: '' },
-      { path: '/app/fax', label: 'Fax', icon: '⎙', shortcut: '' },
-      { path: '/app/reports', label: 'Reports', icon: '▤', shortcut: '' },
+      { path: '/app/tasks', label: 'Tasks', icon: '☑' },
+      { path: '/app/authorizations', label: 'Authorizations', icon: '✓' },
+      { path: '/app/eligibility', label: 'Eligibility', icon: '⚕' },
+      { path: '/app/reports', label: 'Reports', icon: '▤' },
+      { path: '/app/payments', label: 'Payments', icon: '₹' },
+      { path: '/app/waitlist', label: 'Waitlist', icon: '⏳' },
+      { path: '/app/recall', label: 'Recall', icon: '↺' },
+      { path: '/app/referring-providers', label: 'Ref. Providers', icon: '⇋' },
+      { path: '/app/fax', label: 'Fax', icon: '⎙' },
     ],
   },
   {
-    label: 'More',
+    key: 'admin',
+    label: 'Admin',
     items: [
-      { path: '/app/payments', label: 'Payments', icon: '₹', shortcut: '' },
-      { path: '/app/workers-comp', label: "Workers' Comp", icon: '⛑', shortcut: '' },
-      { path: '/app/recall', label: 'Recall', icon: '↺', shortcut: '' },
-      { path: '/app/portal', label: 'Patient Portal', icon: '⊞', shortcut: '' },
-      { path: '/app/mips', label: 'MIPS', icon: '★', shortcut: '' },
-      { path: '/app/locations', label: 'Locations', icon: '⌂', shortcut: '' },
-      { path: '/app/fhir', label: 'FHIR', icon: '⇄', shortcut: '' },
-      { path: '/app/support', label: 'Support', icon: '?', shortcut: '' },
-      { path: '/app/admin', label: 'Admin', icon: '⚙', shortcut: '' },
+      { path: '/app/locations', label: 'Locations', icon: '⌂' },
+      { path: '/app/portal', label: 'Patient Portal', icon: '⊞' },
+      { path: '/app/workers-comp', label: "Workers' Comp", icon: '⛑' },
+      { path: '/app/mips', label: 'MIPS', icon: '★' },
+      { path: '/app/fhir', label: 'FHIR', icon: '⇄' },
+      { path: '/app/support', label: 'Support', icon: '?' },
+      { path: '/app/admin', label: 'Settings', icon: '⚙' },
     ],
   },
 ];
@@ -54,11 +57,40 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const isActive = (path: string) => {
     if (path === '/app') return location.pathname === '/app';
     return location.pathname.startsWith(path);
   };
+
+  // Auto-expand the section that contains the active route
+  const activeSection = SECTIONS.find(s => s.items.some(i => isActive(i.path)));
+
+  const isSectionOpen = (key: string) => {
+    if (expanded[key] !== undefined) return expanded[key];
+    return activeSection?.key === key;
+  };
+
+  const toggleSection = (key: string) => {
+    setExpanded(prev => ({ ...prev, [key]: !isSectionOpen(key) }));
+  };
+
+  const navLink = (item: { path: string; label: string; icon: string }) => (
+    <Link
+      key={item.path}
+      to={item.path}
+      onClick={() => setSidebarOpen(false)}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+        isActive(item.path)
+          ? 'bg-primary-800 text-white'
+          : 'text-primary-200 hover:bg-primary-800/50 hover:text-white'
+      }`}
+    >
+      <span className="text-base w-5 text-center">{item.icon}</span>
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
 
   return (
     <div className="min-h-screen flex">
@@ -68,7 +100,7 @@ export default function Layout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-primary-800">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-primary-900 font-bold text-sm">OS</div>
           <div>
@@ -77,36 +109,35 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto mt-2 px-2 space-y-4 pb-4">
-          {NAV_SECTIONS.map(section => (
-            <div key={section.label}>
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-400">
-                {section.label}
-              </div>
-              <div className="space-y-0.5">
-                {section.items.map(item => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm min-h-touch transition-colors ${
-                      isActive(item.path)
-                        ? 'bg-primary-800 text-white'
-                        : 'text-primary-200 hover:bg-primary-800/50 hover:text-white'
-                    }`}
-                  >
-                    <span className="text-base w-5 text-center">{item.icon}</span>
-                    <span className="flex-1 truncate">{item.label}</span>
-                    {item.shortcut && <span className="text-xs text-primary-400 hidden xl:block">{item.shortcut}</span>}
-                  </Link>
-                ))}
-              </div>
+        <nav className="flex-1 overflow-y-auto mt-2 px-2 pb-4">
+          {/* Primary nav - always visible */}
+          <div className="space-y-0.5">
+            {PRIMARY_NAV.map(navLink)}
+          </div>
+
+          {/* Collapsible sections */}
+          {SECTIONS.map(section => (
+            <div key={section.key} className="mt-3">
+              <button
+                onClick={() => toggleSection(section.key)}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary-400 hover:text-primary-200 transition-colors"
+              >
+                <span>{section.label}</span>
+                <span className={`text-[10px] transition-transform ${isSectionOpen(section.key) ? 'rotate-180' : ''}`}>
+                  &#9662;
+                </span>
+              </button>
+              {isSectionOpen(section.key) && (
+                <div className="space-y-0.5 mt-0.5">
+                  {section.items.map(navLink)}
+                </div>
+              )}
             </div>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-primary-800">
-          <div className="flex items-center gap-3 mb-3">
+        <div className="p-3 border-t border-primary-800">
+          <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 bg-primary-700 rounded-full flex items-center justify-center text-sm font-medium">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
             </div>

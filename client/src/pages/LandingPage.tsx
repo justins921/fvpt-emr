@@ -77,7 +77,7 @@ const FEATURES = [
   {
     icon: '📝',
     title: 'Notes in Half the Time',
-    description: 'SOAP note templates, voice dictation, copy-forward, and text expanders so you spend less time typing and more time treating.',
+    description: 'SOAP note templates, voice dictation, copy-forward, and text expanders so you spend less time typing.',
   },
   {
     icon: '💰',
@@ -87,32 +87,17 @@ const FEATURES = [
   {
     icon: '🏋️',
     title: 'HEP That Patients Actually Do',
-    description: '500+ exercise library with video demos. Build programs in seconds, track adherence, and boost outcomes.',
+    description: '500+ exercise library with video demos. Build programs in seconds and track adherence.',
   },
   {
     icon: '📊',
     title: 'Prove Your Outcomes',
-    description: 'LEFS, DASH, NDI, Oswestry, and 8 more standardized measures with automatic scoring and trend visualization.',
+    description: 'LEFS, DASH, NDI, Oswestry, and 8 more standardized measures with automatic scoring and trends.',
   },
   {
     icon: '🖥️',
     title: 'Telehealth Built In',
     description: 'HIPAA-compliant video visits with one-click patient links. No separate app, no extra cost.',
-  },
-  {
-    icon: '📄',
-    title: 'Paperless Intake',
-    description: 'Custom digital forms patients complete before they arrive. Auto-populate the chart and skip the clipboard.',
-  },
-  {
-    icon: '✅',
-    title: 'Never Miss an Authorization',
-    description: 'Track visit limits, get alerts before expiration, and auto-flag when patients are running low.',
-  },
-  {
-    icon: '📈',
-    title: 'Reports That Drive Decisions',
-    description: 'Revenue, productivity, referral sources, payer mix, cancellation rates — all in real-time dashboards.',
   },
 ];
 
@@ -185,8 +170,8 @@ const COMPARISONS = [
 ];
 
 function ComparisonCell({ value }: { value: boolean | string }) {
-  if (value === true) return <span className="text-green-600 font-bold text-lg">&#10003;</span>;
-  if (value === false) return <span className="text-slate-300 text-lg">&#10005;</span>;
+  if (value === true) return <span className="text-green-600 font-bold">&#10003;</span>;
+  if (value === false) return <span className="text-slate-300">&#10005;</span>;
   return <span className="text-amber-600 text-xs font-medium">{value}</span>;
 }
 
@@ -194,6 +179,7 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [demoSubmitted, setDemoSubmitted] = useState(false);
   const [demoEmail, setDemoEmail] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function handleDemoSubmit(e: FormEvent) {
     e.preventDefault();
@@ -202,75 +188,94 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
-      {/* ─── NAVIGATION (sticky, minimal) ─── */}
+      {/* ─── NAVIGATION ─── */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">OS</div>
-            <span className="font-bold text-lg text-slate-900">EMR OS</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14 sm:h-16">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm">OS</div>
+            <span className="font-bold text-base sm:text-lg text-slate-900">EMR OS</span>
           </div>
+
+          {/* Desktop nav links */}
           <div className="hidden md:flex items-center gap-8 text-sm text-slate-600">
             <a href="#features" className="hover:text-primary-600 transition-colors">Features</a>
             <a href="#pricing" className="hover:text-primary-600 transition-colors">Pricing</a>
             <a href="#compare" className="hover:text-primary-600 transition-colors">Compare</a>
             <a href="#faq" className="hover:text-primary-600 transition-colors">FAQ</a>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link to="/login" className="text-sm text-slate-600 hover:text-primary-600 transition-colors hidden sm:block">Sign In</Link>
-            <a href="#demo" className="bg-primary-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors">
+            <a href="#demo" className="bg-primary-600 text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors">
               Get a Demo
             </a>
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 -mr-2 text-slate-600 hover:text-slate-900"
+              aria-label="Toggle menu"
+            >
+              <span className="text-xl">{mobileMenuOpen ? '✕' : '☰'}</span>
+            </button>
           </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-100 bg-white px-4 py-3 space-y-1">
+            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-slate-600 hover:text-primary-600">Features</a>
+            <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-slate-600 hover:text-primary-600">Pricing</a>
+            <a href="#compare" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-slate-600 hover:text-primary-600">Compare</a>
+            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-slate-600 hover:text-primary-600">FAQ</a>
+            <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="block py-2 text-sm text-primary-600 font-medium">Sign In</Link>
+          </div>
+        )}
       </nav>
 
-      {/* ─── HERO (Copywriting: headline formula + Page CRO: clear value prop above fold) ─── */}
+      {/* ─── HERO ─── */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-blue-50" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 md:pt-24 md:pb-28">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 sm:pt-16 sm:pb-20 md:pt-24 md:pb-28">
           <div className="max-w-3xl mx-auto text-center">
-            {/* Trust badge (Marketing Psychology: Authority) */}
-            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1.5 text-sm text-green-700 mb-6">
+            {/* Trust badge */}
+            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm text-green-700 mb-5 sm:mb-6">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               HIPAA Compliant &middot; SOC 2 &middot; 99.9% Uptime
             </div>
 
-            {/* Headline: [Verb] [outcome] without [pain point] */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
               Run your PT clinic{' '}
               <span className="text-primary-600">without the software headaches</span>
             </h1>
 
-            {/* Subheadline: specific, benefit-driven */}
-            <p className="mt-6 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+            <p className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
               EMR OS is the all-in-one physical therapy platform that handles scheduling, documentation,
-              billing, telehealth, and patient engagement — so you can focus on what matters: your patients.
+              billing, telehealth, and patient engagement — so you can focus on your patients.
             </p>
 
-            {/* Dual CTAs (Page CRO: primary + secondary) */}
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            {/* CTAs */}
+            <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
               <a
                 href="#demo"
-                className="w-full sm:w-auto bg-primary-600 text-white font-semibold px-8 py-3.5 rounded-xl text-base hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/25"
+                className="w-full sm:w-auto bg-primary-600 text-white font-semibold px-8 py-3 sm:py-3.5 rounded-xl text-base hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/25"
               >
                 Request a Demo
               </a>
               <a
                 href="#features"
-                className="w-full sm:w-auto bg-white text-slate-700 font-semibold px-8 py-3.5 rounded-xl text-base hover:bg-slate-50 transition-colors border border-slate-200"
+                className="w-full sm:w-auto bg-white text-slate-700 font-semibold px-8 py-3 sm:py-3.5 rounded-xl text-base hover:bg-slate-50 transition-colors border border-slate-200"
               >
                 See All Features
               </a>
             </div>
 
-            {/* Micro-copy: reduce friction (Signup Flow CRO) */}
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-400">
               See it in action &middot; Free migration &middot; No commitment
             </p>
           </div>
 
-          {/* Social proof strip (Marketing Psychology: Social Proof + Numbers) */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
+          {/* Stats strip */}
+          <div className="mt-12 sm:mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 max-w-3xl mx-auto">
             {[
               { stat: '2,400+', label: 'Providers' },
               { stat: '680+', label: 'Clinics' },
@@ -278,27 +283,27 @@ export default function LandingPage() {
               { stat: '4.9/5', label: 'Customer Rating' },
             ].map(item => (
               <div key={item.label} className="text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900">{item.stat}</div>
-                <div className="text-sm text-slate-500 mt-1">{item.label}</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900">{item.stat}</div>
+                <div className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">{item.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── PROBLEM SECTION (Marketing Psychology: Loss Aversion) ─── */}
-      <section className="bg-slate-900 text-white py-16 md:py-20">
+      {/* ─── PROBLEM SECTION ─── */}
+      <section className="bg-slate-900 text-white py-12 sm:py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold">
+          <div className="max-w-3xl mx-auto text-center mb-10 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
               Your current EMR is costing you more than you think
             </h2>
-            <p className="mt-4 text-slate-400 text-lg">
-              Physical therapy clinics lose an average of $42,000/year to inefficient software — missed authorizations,
+            <p className="mt-3 sm:mt-4 text-slate-400 text-base sm:text-lg">
+              PT clinics lose an average of $42,000/year to inefficient software — missed authorizations,
               denied claims, no-shows without recall, and hours of documentation after hours.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <div className="grid sm:grid-cols-3 gap-4 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
             {[
               {
                 pain: '$15K+ in expired authorizations',
@@ -316,32 +321,32 @@ export default function LandingPage() {
                 icon: '📉',
               },
             ].map(item => (
-              <div key={item.pain} className="bg-slate-800 rounded-2xl p-6">
-                <div className="text-3xl mb-3">{item.icon}</div>
-                <div className="text-red-400 font-semibold text-sm line-through mb-1">{item.pain}</div>
-                <div className="text-white font-medium">{item.solution}</div>
+              <div key={item.pain} className="bg-slate-800 rounded-2xl p-5 sm:p-6">
+                <div className="text-2xl sm:text-3xl mb-2 sm:mb-3">{item.icon}</div>
+                <div className="text-red-400 font-semibold text-xs sm:text-sm line-through mb-1">{item.pain}</div>
+                <div className="text-white font-medium text-sm sm:text-base">{item.solution}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── FEATURES GRID (Copywriting: Benefits over features) ─── */}
-      <section id="features" className="py-16 md:py-24 bg-white">
+      {/* ─── FEATURES GRID ─── */}
+      <section id="features" className="py-12 sm:py-16 md:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">
               Everything your clinic needs. Nothing it doesn&apos;t.
             </h2>
-            <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-slate-500 max-w-2xl mx-auto">
               Built specifically for physical therapy, occupational therapy, and speech-language pathology practices.
             </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {FEATURES.map(f => (
-              <div key={f.title} className="group rounded-2xl border border-slate-100 p-6 hover:border-primary-200 hover:shadow-lg hover:shadow-primary-50 transition-all">
-                <div className="text-3xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">{f.title}</h3>
+              <div key={f.title} className="rounded-2xl border border-slate-100 p-5 sm:p-6 hover:border-primary-200 hover:shadow-lg hover:shadow-primary-50 transition-all">
+                <div className="text-2xl sm:text-3xl mb-3 sm:mb-4">{f.icon}</div>
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-1.5 sm:mb-2">{f.title}</h3>
                 <p className="text-slate-500 text-sm leading-relaxed">{f.description}</p>
               </div>
             ))}
@@ -349,18 +354,20 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── COMPARISON TABLE (Competitor Alternatives skill) ─── */}
-      <section id="compare" className="py-16 md:py-24 bg-slate-50">
+      {/* ─── COMPARISON TABLE ─── */}
+      <section id="compare" className="py-12 sm:py-16 md:py-24 bg-slate-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">
               See how EMR OS compares
             </h2>
-            <p className="mt-4 text-lg text-slate-500">
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-slate-500">
               More features included. No add-on pricing. No long-term contracts.
             </p>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+          {/* Desktop table */}
+          <div className="hidden sm:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -384,25 +391,47 @@ export default function LandingPage() {
               </table>
             </div>
           </div>
+
+          {/* Mobile comparison cards */}
+          <div className="sm:hidden space-y-3">
+            {COMPARISONS.map(row => (
+              <div key={row.feature} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+                <div className="font-medium text-slate-900 text-sm mb-2">{row.feature}</div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div>
+                    <div className="text-primary-600 font-semibold mb-0.5">EMR OS</div>
+                    <ComparisonCell value={row.emros} />
+                  </div>
+                  <div>
+                    <div className="text-slate-500 mb-0.5">WebPT</div>
+                    <ComparisonCell value={row.webpt} />
+                  </div>
+                  <div>
+                    <div className="text-slate-500 mb-0.5">Practice Perfect</div>
+                    <ComparisonCell value={row.pp} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS (Marketing Psychology: Social Proof) ─── */}
-      <section className="py-16 md:py-24 bg-white">
+      {/* ─── TESTIMONIALS ─── */}
+      <section className="py-12 sm:py-16 md:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">
               Trusted by clinics across the country
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {TESTIMONIALS.map(t => (
-              <div key={t.name} className="bg-slate-50 rounded-2xl p-8">
-                {/* Metric callout (Marketing Psychology: Anchoring) */}
-                <div className="inline-block bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full mb-4">
+              <div key={t.name} className="bg-slate-50 rounded-2xl p-6 sm:p-8">
+                <div className="inline-block bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full mb-3 sm:mb-4">
                   {t.metric}
                 </div>
-                <blockquote className="text-slate-700 leading-relaxed mb-6">
+                <blockquote className="text-slate-700 text-sm sm:text-base leading-relaxed mb-4 sm:mb-6">
                   &ldquo;{t.quote}&rdquo;
                 </blockquote>
                 <div>
@@ -415,43 +444,43 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── PRICING (Pricing Strategy: Good-Better-Best + Anchoring + Decoy) ─── */}
-      <section id="pricing" className="py-16 md:py-24 bg-slate-50">
+      {/* ─── PRICING ─── */}
+      <section id="pricing" className="py-12 sm:py-16 md:py-24 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">
               Simple, transparent pricing
             </h2>
-            <p className="mt-4 text-lg text-slate-500">
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-slate-500">
               No hidden fees. No add-on charges. Everything included in your plan.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
             {TIERS.map(tier => (
               <div
                 key={tier.name}
-                className={`rounded-2xl p-8 flex flex-col ${
+                className={`rounded-2xl p-6 sm:p-8 flex flex-col ${
                   tier.highlight
-                    ? 'bg-primary-600 text-white ring-4 ring-primary-600/20 shadow-xl scale-[1.03]'
+                    ? 'bg-primary-600 text-white ring-4 ring-primary-600/20 shadow-xl md:scale-[1.03]'
                     : 'bg-white border border-slate-200 shadow-sm'
                 }`}
               >
                 {tier.highlight && (
                   <div className="text-xs font-bold uppercase tracking-wider text-primary-200 mb-2">Most Popular</div>
                 )}
-                <h3 className={`text-xl font-bold ${tier.highlight ? 'text-white' : 'text-slate-900'}`}>{tier.name}</h3>
-                <div className="mt-4 flex items-baseline gap-1">
-                  <span className={`text-4xl font-extrabold ${tier.highlight ? 'text-white' : 'text-slate-900'}`}>
+                <h3 className={`text-lg sm:text-xl font-bold ${tier.highlight ? 'text-white' : 'text-slate-900'}`}>{tier.name}</h3>
+                <div className="mt-3 sm:mt-4 flex items-baseline gap-1">
+                  <span className={`text-3xl sm:text-4xl font-extrabold ${tier.highlight ? 'text-white' : 'text-slate-900'}`}>
                     ${tier.price}
                   </span>
                   <span className={`text-sm ${tier.highlight ? 'text-primary-200' : 'text-slate-400'}`}>{tier.period}</span>
                 </div>
-                <p className={`mt-3 text-sm leading-relaxed ${tier.highlight ? 'text-primary-100' : 'text-slate-500'}`}>
+                <p className={`mt-2 sm:mt-3 text-sm leading-relaxed ${tier.highlight ? 'text-primary-100' : 'text-slate-500'}`}>
                   {tier.description}
                 </p>
                 <a
                   href="#demo"
-                  className={`mt-6 block text-center font-semibold py-3 rounded-xl transition-colors ${
+                  className={`mt-5 sm:mt-6 block text-center font-semibold py-2.5 sm:py-3 rounded-xl transition-colors ${
                     tier.highlight
                       ? 'bg-white text-primary-600 hover:bg-primary-50'
                       : 'bg-primary-600 text-white hover:bg-primary-700'
@@ -459,7 +488,7 @@ export default function LandingPage() {
                 >
                   {tier.cta}
                 </a>
-                <ul className={`mt-8 space-y-3 text-sm flex-1 ${tier.highlight ? 'text-primary-100' : 'text-slate-600'}`}>
+                <ul className={`mt-6 sm:mt-8 space-y-2.5 sm:space-y-3 text-sm flex-1 ${tier.highlight ? 'text-primary-100' : 'text-slate-600'}`}>
                   {tier.features.map(f => (
                     <li key={f} className="flex items-start gap-2">
                       <span className={`mt-0.5 ${tier.highlight ? 'text-primary-200' : 'text-green-500'}`}>&#10003;</span>
@@ -470,34 +499,34 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-slate-400 mt-8">
+          <p className="text-center text-xs sm:text-sm text-slate-400 mt-6 sm:mt-8">
             All plans include HIPAA compliance, free onboarding, and data migration. Volume discounts for 5+ providers.
           </p>
         </div>
       </section>
 
-      {/* ─── FAQ (Page CRO: Objection Handling) ─── */}
-      <section id="faq" className="py-16 md:py-24 bg-white">
+      {/* ─── FAQ ─── */}
+      <section id="faq" className="py-12 sm:py-16 md:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900">
               Frequently asked questions
             </h2>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {FAQS.map((faq, i) => (
               <div key={i} className="border border-slate-200 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 text-left hover:bg-slate-50 transition-colors"
                 >
-                  <span className="font-medium text-slate-900">{faq.q}</span>
-                  <span className={`text-slate-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`}>
+                  <span className="font-medium text-slate-900 text-sm sm:text-base pr-4">{faq.q}</span>
+                  <span className={`text-slate-400 transition-transform flex-shrink-0 ${openFaq === i ? 'rotate-180' : ''}`}>
                     &#9662;
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-4 text-sm text-slate-600 leading-relaxed">
+                  <div className="px-4 sm:px-6 pb-3 sm:pb-4 text-sm text-slate-600 leading-relaxed">
                     {faq.a}
                   </div>
                 )}
@@ -507,49 +536,44 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── DEMO / CTA SECTION (Signup Flow CRO: minimal fields + Form CRO) ─── */}
-      <section id="demo" className="py-16 md:py-24 bg-gradient-to-br from-primary-600 to-primary-800 text-white">
+      {/* ─── DEMO / CTA SECTION ─── */}
+      <section id="demo" className="py-12 sm:py-16 md:py-24 bg-gradient-to-br from-primary-600 to-primary-800 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-8 sm:gap-12 items-center">
             <div>
-              <h2 className="text-3xl sm:text-4xl font-bold leading-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold leading-tight">
                 Ready to modernize your clinic?
               </h2>
-              <p className="mt-4 text-primary-100 text-lg leading-relaxed">
+              <p className="mt-3 sm:mt-4 text-primary-100 text-base sm:text-lg leading-relaxed">
                 See EMR OS in action with a live demo. We&apos;ll walk you through the
                 platform and show you exactly how it fits your workflow.
               </p>
-              <div className="mt-6 space-y-3 text-sm text-primary-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-primary-300">&#10003;</span>
-                  <span>Personalized walkthrough of the full platform</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-primary-300">&#10003;</span>
-                  <span>Free data migration from your current EMR</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-primary-300">&#10003;</span>
-                  <span>Live onboarding with a PT workflow specialist</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-primary-300">&#10003;</span>
-                  <span>No obligation — just a conversation</span>
-                </div>
+              <div className="mt-5 sm:mt-6 space-y-2.5 sm:space-y-3 text-sm text-primary-200">
+                {[
+                  'Personalized walkthrough of the full platform',
+                  'Free data migration from your current EMR',
+                  'Live onboarding with a PT workflow specialist',
+                  'No obligation — just a conversation',
+                ].map(item => (
+                  <div key={item} className="flex items-center gap-2">
+                    <span className="text-primary-300">&#10003;</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="bg-white rounded-2xl p-8 text-slate-900">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 text-slate-900">
               {demoSubmitted ? (
-                <div className="text-center py-8">
+                <div className="text-center py-6 sm:py-8">
                   <div className="text-4xl mb-4">&#10003;</div>
-                  <h3 className="text-xl font-bold text-slate-900">We&apos;ll be in touch!</h3>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900">We&apos;ll be in touch!</h3>
                   <p className="text-slate-500 mt-2 text-sm">
                     Expect a personalized demo invitation at <strong>{demoEmail}</strong> within one business day.
                   </p>
                 </div>
               ) : (
                 <form onSubmit={handleDemoSubmit}>
-                  <h3 className="text-lg font-bold mb-4">Request a demo</h3>
+                  <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Request a demo</h3>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Work email</label>
@@ -558,7 +582,7 @@ export default function LandingPage() {
                         required
                         value={demoEmail}
                         onChange={e => setDemoEmail(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        className="w-full rounded-lg border border-slate-300 px-3 sm:px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                         placeholder="you@yourclinic.com"
                       />
                     </div>
@@ -567,13 +591,13 @@ export default function LandingPage() {
                       <input
                         type="text"
                         required
-                        className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        className="w-full rounded-lg border border-slate-300 px-3 sm:px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                         placeholder="Acme Physical Therapy"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Number of providers</label>
-                      <select className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white">
+                      <select className="w-full rounded-lg border border-slate-300 px-3 sm:px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white">
                         <option>1-2</option>
                         <option>3-5</option>
                         <option>6-10</option>
@@ -583,7 +607,7 @@ export default function LandingPage() {
                     </div>
                     <button
                       type="submit"
-                      className="w-full bg-primary-600 text-white font-semibold py-3 rounded-xl hover:bg-primary-700 transition-colors mt-2"
+                      className="w-full bg-primary-600 text-white font-semibold py-2.5 sm:py-3 rounded-xl hover:bg-primary-700 transition-colors mt-1"
                     >
                       Request a Demo
                     </button>
@@ -599,11 +623,11 @@ export default function LandingPage() {
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="bg-slate-900 text-slate-400 py-12">
+      <footer className="bg-slate-900 text-slate-400 py-10 sm:py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="col-span-2 md:col-span-1">
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
                 <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">OS</div>
                 <span className="text-white font-bold">EMR OS</span>
               </div>
@@ -643,7 +667,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* ─── SCHEMA MARKUP (Schema Markup skill: SoftwareApplication + FAQPage + Organization) ─── */}
+      {/* ─── SCHEMA MARKUP ─── */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
