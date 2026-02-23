@@ -52,15 +52,15 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link to="/patients" className="card hover:shadow-md transition-shadow">
+        <Link to="/app/patients" className="card hover:shadow-md transition-shadow">
           <div className="text-sm text-slate-500">Total Patients</div>
           <div className="text-3xl font-bold text-slate-900 mt-1">{stats.patients}</div>
         </Link>
-        <Link to="/schedule" className="card hover:shadow-md transition-shadow">
+        <Link to="/app/schedule" className="card hover:shadow-md transition-shadow">
           <div className="text-sm text-slate-500">Today's Appointments</div>
           <div className="text-3xl font-bold text-primary-600 mt-1">{stats.todayAppts}</div>
         </Link>
-        <Link to="/billing" className="card hover:shadow-md transition-shadow">
+        <Link to="/app/billing" className="card hover:shadow-md transition-shadow">
           <div className="text-sm text-slate-500">Draft Claims</div>
           <div className="text-3xl font-bold text-yellow-600 mt-1">{stats.pendingClaims}</div>
         </Link>
@@ -79,7 +79,7 @@ export default function DashboardPage() {
                   {new Date(appt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                 </div>
                 <div className="flex-1">
-                  <Link to={`/patients/${appt.patient_id}`} className="text-sm font-medium text-primary-600 hover:underline">
+                  <Link to={`/app/patients/${appt.patient_id}`} className="text-sm font-medium text-primary-600 hover:underline">
                     {appt.patient_last_name}, {appt.patient_first_name}
                   </Link>
                   <div className="text-xs text-slate-500 capitalize">{appt.appointment_type.replace('_', ' ')}</div>
@@ -101,10 +101,10 @@ export default function DashboardPage() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link to="/patients?new=1" className="btn-secondary text-center text-sm">New Patient</Link>
-          <Link to="/schedule" className="btn-secondary text-center text-sm">Schedule Appt</Link>
-          <Link to="/billing" className="btn-secondary text-center text-sm">View Claims</Link>
-          <Link to="/admin" className="btn-secondary text-center text-sm">Admin Panel</Link>
+          <Link to="/app/patients?new=1" className="btn-secondary text-center text-sm">New Patient</Link>
+          <Link to="/app/schedule" className="btn-secondary text-center text-sm">Schedule Appt</Link>
+          <Link to="/app/billing" className="btn-secondary text-center text-sm">View Claims</Link>
+          <Link to="/app/admin" className="btn-secondary text-center text-sm">Admin Panel</Link>
         </div>
       </div>
     </div>

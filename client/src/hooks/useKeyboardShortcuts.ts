@@ -11,11 +11,12 @@ export function useKeyboardShortcuts() {
 
       if (e.altKey) {
         switch (e.key) {
-          case 's': e.preventDefault(); navigate('/schedule'); break;
-          case 'p': e.preventDefault(); navigate('/patients'); break;
-          case 'b': e.preventDefault(); navigate('/billing'); break;
-          case 'a': e.preventDefault(); navigate('/admin/audit'); break;
-          case 'h': e.preventDefault(); navigate('/'); break;
+          case 's': e.preventDefault(); navigate('/app/schedule'); break;
+          case 'p': e.preventDefault(); navigate('/app/patients'); break;
+          case 'b': e.preventDefault(); navigate('/app/billing'); break;
+          case 'a': e.preventDefault(); navigate('/app/admin/audit'); break;
+          case 'h': e.preventDefault(); navigate('/app'); break;
+          case 'm': e.preventDefault(); navigate('/app/messages'); break;
         }
       }
     };

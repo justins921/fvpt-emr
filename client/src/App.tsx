@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Layout from './components/Layout';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PatientsPage from './pages/PatientsPage';
@@ -57,8 +58,12 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+      {/* Public landing page for unauthenticated visitors */}
+      <Route path="/" element={isAuthenticated ? <Navigate to="/app" /> : <LandingPage />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/app" /> : <LoginPage />} />
+
+      {/* Protected app routes */}
+      <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="patients" element={<PatientsPage />} />
         <Route path="patients/:id/*" element={<PatientChartPage />} />
@@ -68,7 +73,7 @@ export default function App() {
         <Route path="support" element={<SupportPage />} />
         <Route path="admin/*" element={<AdminPage />} />
 
-        {/* New feature routes */}
+        {/* Feature routes */}
         <Route path="exercises/*" element={<HEPPage />} />
         <Route path="outcome-measures" element={<OutcomeMeasuresPage />} />
         <Route path="intake-forms/*" element={<IntakeFormsPage />} />

@@ -6,46 +6,46 @@ const NAV_SECTIONS = [
   {
     label: 'Core',
     items: [
-      { path: '/', label: 'Dashboard', icon: '□', shortcut: 'Alt+H' },
-      { path: '/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
-      { path: '/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
-      { path: '/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
-      { path: '/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
+      { path: '/app', label: 'Dashboard', icon: '□', shortcut: 'Alt+H' },
+      { path: '/app/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
+      { path: '/app/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
+      { path: '/app/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
+      { path: '/app/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
     ],
   },
   {
     label: 'Clinical',
     items: [
-      { path: '/exercises', label: 'Exercises / HEP', icon: '⚡', shortcut: '' },
-      { path: '/outcome-measures', label: 'Outcomes', icon: '◎', shortcut: '' },
-      { path: '/telehealth', label: 'Telehealth', icon: '◉', shortcut: '' },
-      { path: '/intake-forms', label: 'Intake Forms', icon: '✎', shortcut: '' },
+      { path: '/app/exercises', label: 'Exercises / HEP', icon: '⚡', shortcut: '' },
+      { path: '/app/outcome-measures', label: 'Outcomes', icon: '◎', shortcut: '' },
+      { path: '/app/telehealth', label: 'Telehealth', icon: '◉', shortcut: '' },
+      { path: '/app/intake-forms', label: 'Intake Forms', icon: '✎', shortcut: '' },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { path: '/tasks', label: 'Tasks', icon: '☑', shortcut: '' },
-      { path: '/waitlist', label: 'Waitlist', icon: '⏳', shortcut: '' },
-      { path: '/authorizations', label: 'Authorizations', icon: '✓', shortcut: '' },
-      { path: '/eligibility', label: 'Eligibility', icon: '⚕', shortcut: '' },
-      { path: '/referring-providers', label: 'Ref. Providers', icon: '⇋', shortcut: '' },
-      { path: '/fax', label: 'Fax', icon: '⎙', shortcut: '' },
-      { path: '/reports', label: 'Reports', icon: '▤', shortcut: '' },
+      { path: '/app/tasks', label: 'Tasks', icon: '☑', shortcut: '' },
+      { path: '/app/waitlist', label: 'Waitlist', icon: '⏳', shortcut: '' },
+      { path: '/app/authorizations', label: 'Authorizations', icon: '✓', shortcut: '' },
+      { path: '/app/eligibility', label: 'Eligibility', icon: '⚕', shortcut: '' },
+      { path: '/app/referring-providers', label: 'Ref. Providers', icon: '⇋', shortcut: '' },
+      { path: '/app/fax', label: 'Fax', icon: '⎙', shortcut: '' },
+      { path: '/app/reports', label: 'Reports', icon: '▤', shortcut: '' },
     ],
   },
   {
     label: 'More',
     items: [
-      { path: '/payments', label: 'Payments', icon: '₹', shortcut: '' },
-      { path: '/workers-comp', label: "Workers' Comp", icon: '⛑', shortcut: '' },
-      { path: '/recall', label: 'Recall', icon: '↺', shortcut: '' },
-      { path: '/portal', label: 'Patient Portal', icon: '⊞', shortcut: '' },
-      { path: '/mips', label: 'MIPS', icon: '★', shortcut: '' },
-      { path: '/locations', label: 'Locations', icon: '⌂', shortcut: '' },
-      { path: '/fhir', label: 'FHIR', icon: '⇄', shortcut: '' },
-      { path: '/support', label: 'Support', icon: '?', shortcut: '' },
-      { path: '/admin', label: 'Admin', icon: '⚙', shortcut: '' },
+      { path: '/app/payments', label: 'Payments', icon: '₹', shortcut: '' },
+      { path: '/app/workers-comp', label: "Workers' Comp", icon: '⛑', shortcut: '' },
+      { path: '/app/recall', label: 'Recall', icon: '↺', shortcut: '' },
+      { path: '/app/portal', label: 'Patient Portal', icon: '⊞', shortcut: '' },
+      { path: '/app/mips', label: 'MIPS', icon: '★', shortcut: '' },
+      { path: '/app/locations', label: 'Locations', icon: '⌂', shortcut: '' },
+      { path: '/app/fhir', label: 'FHIR', icon: '⇄', shortcut: '' },
+      { path: '/app/support', label: 'Support', icon: '?', shortcut: '' },
+      { path: '/app/admin', label: 'Admin', icon: '⚙', shortcut: '' },
     ],
   },
 ];
@@ -56,7 +56,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/';
+    if (path === '/app') return location.pathname === '/app';
     return location.pathname.startsWith(path);
   };
 
