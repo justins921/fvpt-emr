@@ -57,7 +57,7 @@ router.get('/', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Re
          i.plan_name as insurance_plan_name
        FROM authorizations a
        JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
-       LEFT JOIN insurances i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
+       LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
        WHERE ${where}
        ORDER BY a.end_date ASC
        LIMIT $${idx++} OFFSET $${idx}`,
@@ -91,7 +91,7 @@ router.get('/alerts', requirePermission(Permission.AUTHORIZATION_VIEW), async (r
          i.payer_name
        FROM authorizations a
        JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
-       LEFT JOIN insurances i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
+       LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
        WHERE a.clinic_id = $1
          AND a.status = 'active'
          AND a.end_date <= (CURRENT_DATE + INTERVAL '30 days')
@@ -111,7 +111,7 @@ router.get('/alerts', requirePermission(Permission.AUTHORIZATION_VIEW), async (r
          (a.authorized_visits - a.used_visits) as remaining_visits
        FROM authorizations a
        JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
-       LEFT JOIN insurances i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
+       LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
        WHERE a.clinic_id = $1
          AND a.status = 'active'
          AND (a.authorized_visits - a.used_visits) < 3
@@ -146,7 +146,7 @@ router.get('/:id', requirePermission(Permission.AUTHORIZATION_VIEW), async (req:
          i.plan_name as insurance_plan_name
        FROM authorizations a
        JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
-       LEFT JOIN insurances i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
+       LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
        WHERE a.id = $1 AND a.clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
@@ -188,7 +188,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
 
     // Verify insurance belongs to this clinic and patient
     const insuranceCheck = await query(
-      `SELECT id FROM insurances WHERE id = $1 AND clinic_id = $2 AND patient_id = $3`,
+      `SELECT id FROM insurance WHERE id = $1 AND clinic_id = $2 AND patient_id = $3`,
       [input.insurance_id, req.auth!.clinicId, input.patient_id]
     );
     if (insuranceCheck.rows.length === 0) {

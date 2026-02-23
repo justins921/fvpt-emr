@@ -299,9 +299,9 @@ router.post('/:id/generate', requirePermission(Permission.RECALL_MANAGE), async 
       }
 
       await query(
-        `INSERT INTO recall_entries (campaign_id, patient_id, status, contact_phone, contact_email)
-         VALUES ($1, $2, 'pending', $3, $4)`,
-        [req.params.id, patient.id, patient.phone || null, patient.email || null]
+        `INSERT INTO recall_entries (campaign_id, patient_id, status)
+         VALUES ($1, $2, 'pending')`,
+        [req.params.id, patient.id]
       );
       created++;
     }
@@ -354,11 +354,12 @@ router.post('/:id/send', requirePermission(Permission.RECALL_MANAGE), async (req
 
     const campaign = campaignResult.rows[0];
 
-    // Get all pending entries for this campaign
+    // Get all pending entries for this campaign, joining to patients for contact info
     const pendingEntries = await query(
-      `SELECT id, patient_id, contact_phone, contact_email
-       FROM recall_entries
-       WHERE campaign_id = $1 AND status = 'pending'`,
+      `SELECT re.id, re.patient_id, p.phone as contact_phone, p.email as contact_email
+       FROM recall_entries re
+       JOIN patients p ON re.patient_id = p.id
+       WHERE re.campaign_id = $1 AND re.status = 'pending'`,
       [req.params.id]
     );
 
@@ -373,7 +374,7 @@ router.post('/:id/send', requirePermission(Permission.RECALL_MANAGE), async (req
 
         if (!canSms && !canEmail) {
           await query(
-            `UPDATE recall_entries SET status = 'failed', failure_reason = 'No valid contact info', sent_at = NOW()
+            `UPDATE recall_entries SET status = 'failed', response = 'No valid contact info', contacted_at = NOW()
              WHERE id = $1`,
             [entry.id]
           );
@@ -384,14 +385,14 @@ router.post('/:id/send', requirePermission(Permission.RECALL_MANAGE), async (req
         // In a real integration, dispatch via SMS/email service here.
         // For now, mark as sent.
         await query(
-          `UPDATE recall_entries SET status = 'sent', sent_at = NOW()
+          `UPDATE recall_entries SET status = 'sent', contacted_at = NOW()
            WHERE id = $1`,
           [entry.id]
         );
         sent++;
       } catch {
         await query(
-          `UPDATE recall_entries SET status = 'failed', failure_reason = 'Send error', sent_at = NOW()
+          `UPDATE recall_entries SET status = 'failed', response = 'Send error', contacted_at = NOW()
            WHERE id = $1`,
           [entry.id]
         );
@@ -461,8 +462,7 @@ router.get('/:id/entries', requirePermission(Permission.RECALL_VIEW), async (req
     );
 
     const result = await query(
-      `SELECT re.id, re.patient_id, re.status, re.contact_phone, re.contact_email,
-              re.sent_at, re.failure_reason, re.created_at,
+      `SELECT re.id, re.patient_id, re.status, re.contacted_at, re.response, re.created_at,
               p.first_name as patient_first_name, p.last_name as patient_last_name,
               p.mrn, p.phone as patient_phone, p.email as patient_email
        FROM recall_entries re

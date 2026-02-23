@@ -340,8 +340,8 @@ staffRouter.post('/submissions/send', requirePermission(Permission.INTAKE_CREATE
     const expiresAt = new Date(Date.now() + input.expires_hours * 60 * 60 * 1000);
 
     const result = await query(
-      `INSERT INTO intake_form_submissions (clinic_id, template_id, patient_id, access_token, status, expires_at, sent_by)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+      `INSERT INTO intake_form_submissions (clinic_id, template_id, patient_id, access_token, status, expires_at)
+       VALUES ($1, $2, $3, $4, 'pending', $5)
        RETURNING id, access_token, expires_at, status, created_at`,
       [
         req.auth!.clinicId,
@@ -349,7 +349,6 @@ staffRouter.post('/submissions/send', requirePermission(Permission.INTAKE_CREATE
         input.patient_id || null,
         accessToken,
         expiresAt,
-        req.auth!.userId,
       ]
     );
 
@@ -512,13 +511,13 @@ staffRouter.post('/submissions/:id/apply', requirePermission(Permission.INTAKE_M
     if (responses['insurance_payer_name'] && responses['insurance_member_id']) {
       // Check if the patient already has a primary insurance entry
       const existingInsurance = await query(
-        `SELECT id FROM insurances WHERE patient_id = $1 AND clinic_id = $2 AND is_primary = true AND is_active = true`,
+        `SELECT id FROM insurance WHERE patient_id = $1 AND clinic_id = $2 AND is_primary = true AND is_active = true`,
         [submission.patient_id, req.auth!.clinicId]
       );
 
       if (existingInsurance.rows.length > 0) {
         await query(
-          `UPDATE insurances
+          `UPDATE insurance
            SET payer_name = $3, member_id = $4, group_number = $5, subscriber_name = $6,
                subscriber_dob = $7, subscriber_relationship = $8, updated_at = NOW()
            WHERE id = $1 AND clinic_id = $2`,
@@ -535,7 +534,7 @@ staffRouter.post('/submissions/:id/apply', requirePermission(Permission.INTAKE_M
         );
       } else {
         await query(
-          `INSERT INTO insurances (clinic_id, patient_id, payer_name, payer_id, member_id, group_number,
+          `INSERT INTO insurance (clinic_id, patient_id, payer_name, payer_id, member_id, group_number,
              subscriber_name, subscriber_dob, subscriber_relationship, coverage_start, is_primary, is_active)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_DATE, true, true)`,
           [

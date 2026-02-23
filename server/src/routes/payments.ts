@@ -145,8 +145,8 @@ router.post('/charge', requirePermission(Permission.PAYMENT_PROCESS), async (req
 
     // Create payment transaction record
     const txnResult = await query(
-      `INSERT INTO payment_transactions (clinic_id, patient_id, payment_method_id, type, amount_cents, description, processor_token, status)
-       VALUES ($1, $2, $3, 'charge', $4, $5, $6, 'completed')
+      `INSERT INTO payment_transactions (clinic_id, patient_id, payment_method_id, amount_cents, description, processor_transaction_id, status, processed_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7)
        RETURNING id`,
       [
         req.auth!.clinicId,
@@ -155,6 +155,7 @@ router.post('/charge', requirePermission(Permission.PAYMENT_PROCESS), async (req
         input.amount_cents,
         input.description,
         method.processor_token,
+        req.auth!.userId,
       ]
     );
 
@@ -211,9 +212,9 @@ router.post('/refund', requirePermission(Permission.PAYMENT_PROCESS), async (req
 
     // Fetch original transaction
     const txnResult = await query(
-      `SELECT id, patient_id, payment_method_id, amount_cents, processor_token, status
+      `SELECT id, patient_id, payment_method_id, amount_cents, processor_transaction_id, status
        FROM payment_transactions
-       WHERE id = $1 AND clinic_id = $2 AND type = 'charge' AND status = 'completed'`,
+       WHERE id = $1 AND clinic_id = $2 AND status = 'completed'`,
       [input.transaction_id, req.auth!.clinicId]
     );
 
@@ -230,8 +231,8 @@ router.post('/refund', requirePermission(Permission.PAYMENT_PROCESS), async (req
     const existingRefunds = await query(
       `SELECT COALESCE(SUM(amount_cents), 0) as total_refunded
        FROM payment_transactions
-       WHERE clinic_id = $1 AND original_transaction_id = $2 AND type = 'refund'`,
-      [req.auth!.clinicId, input.transaction_id]
+       WHERE clinic_id = $1 AND description = $2`,
+      [req.auth!.clinicId, `Refund for transaction ${input.transaction_id}`]
     );
 
     const totalRefunded = parseInt(existingRefunds.rows[0].total_refunded, 10);
@@ -250,8 +251,8 @@ router.post('/refund', requirePermission(Permission.PAYMENT_PROCESS), async (req
 
     // Create refund transaction
     const refundResult = await query(
-      `INSERT INTO payment_transactions (clinic_id, patient_id, payment_method_id, type, amount_cents, description, processor_token, status, original_transaction_id)
-       VALUES ($1, $2, $3, 'refund', $4, $5, $6, 'completed', $7)
+      `INSERT INTO payment_transactions (clinic_id, patient_id, payment_method_id, amount_cents, description, processor_transaction_id, status, processed_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7)
        RETURNING id`,
       [
         req.auth!.clinicId,
@@ -259,8 +260,8 @@ router.post('/refund', requirePermission(Permission.PAYMENT_PROCESS), async (req
         originalTxn.payment_method_id,
         refundAmount,
         `Refund for transaction ${input.transaction_id}`,
-        originalTxn.processor_token,
-        input.transaction_id,
+        originalTxn.processor_transaction_id,
+        req.auth!.userId,
       ]
     );
 

@@ -109,7 +109,7 @@ router.get('/programs', requirePermission(Permission.HEP_VIEW), async (req: Requ
     }
 
     const countResult = await query(
-      `SELECT COUNT(*) as total FROM hep_programs hp WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total FROM exercise_programs hp WHERE ${whereClause}`,
       params
     );
 
@@ -118,7 +118,7 @@ router.get('/programs', requirePermission(Permission.HEP_VIEW), async (req: Requ
               hp.frequency, hp.duration_weeks, hp.status, hp.sent_at, hp.created_at,
               p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn,
               u.first_name as created_by_first_name, u.last_name as created_by_last_name
-       FROM hep_programs hp
+       FROM exercise_programs hp
        LEFT JOIN patients p ON hp.patient_id = p.id
        LEFT JOIN users u ON hp.created_by = u.id
        WHERE ${whereClause}
@@ -148,7 +148,7 @@ router.get('/programs/:id', requirePermission(Permission.HEP_VIEW), async (req: 
       `SELECT hp.*,
               p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn,
               u.first_name as created_by_first_name, u.last_name as created_by_last_name
-       FROM hep_programs hp
+       FROM exercise_programs hp
        LEFT JOIN patients p ON hp.patient_id = p.id
        LEFT JOIN users u ON hp.created_by = u.id
        WHERE hp.id = $1 AND hp.clinic_id = $2`,
@@ -166,8 +166,8 @@ router.get('/programs/:id', requirePermission(Permission.HEP_VIEW), async (req: 
               he.name as exercise_name, he.description as exercise_description,
               he.instructions as exercise_instructions, he.body_region,
               he.category, he.difficulty, he.video_url, he.image_url
-       FROM hep_program_items hpi
-       JOIN hep_exercises he ON hpi.exercise_id = he.id
+       FROM exercise_program_items hpi
+       JOIN exercises he ON hpi.exercise_id = he.id
        WHERE hpi.program_id = $1
        ORDER BY hpi.sort_order`,
       [req.params.id]
@@ -195,7 +195,7 @@ router.post('/programs', requirePermission(Permission.HEP_CREATE), async (req: R
 
     const result = await transaction(async (client) => {
       const programResult = await client.query(
-        `INSERT INTO hep_programs (
+        `INSERT INTO exercise_programs (
           clinic_id, name, description, patient_id, is_template,
           frequency, duration_weeks, notes, created_by
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -213,7 +213,7 @@ router.post('/programs', requirePermission(Permission.HEP_CREATE), async (req: R
       if (input.items && input.items.length > 0) {
         for (const item of input.items) {
           await client.query(
-            `INSERT INTO hep_program_items (
+            `INSERT INTO exercise_program_items (
               program_id, exercise_id, sort_order, sets, reps,
               hold_seconds, duration_minutes, resistance, notes
             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -285,7 +285,7 @@ router.put('/programs/:id', requirePermission(Permission.HEP_EDIT), async (req: 
     }
 
     const result = await query(
-      `UPDATE hep_programs SET ${fields.join(', ')} WHERE id = $1 AND clinic_id = $2 RETURNING id`,
+      `UPDATE exercise_programs SET ${fields.join(', ')} WHERE id = $1 AND clinic_id = $2 RETURNING id`,
       [req.params.id, req.auth!.clinicId, ...values]
     );
 
@@ -321,7 +321,7 @@ router.post('/programs/:id/items', requirePermission(Permission.HEP_EDIT), async
 
     // Verify program exists and belongs to this clinic
     const programCheck = await query(
-      `SELECT id FROM hep_programs WHERE id = $1 AND clinic_id = $2`,
+      `SELECT id FROM exercise_programs WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
     if (programCheck.rows.length === 0) {
@@ -331,7 +331,7 @@ router.post('/programs/:id/items', requirePermission(Permission.HEP_EDIT), async
 
     // Verify exercise exists and belongs to this clinic
     const exerciseCheck = await query(
-      `SELECT id FROM hep_exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
+      `SELECT id FROM exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
       [input.exerciseId, req.auth!.clinicId]
     );
     if (exerciseCheck.rows.length === 0) {
@@ -340,7 +340,7 @@ router.post('/programs/:id/items', requirePermission(Permission.HEP_EDIT), async
     }
 
     const result = await query(
-      `INSERT INTO hep_program_items (
+      `INSERT INTO exercise_program_items (
         program_id, exercise_id, sort_order, sets, reps,
         hold_seconds, duration_minutes, resistance, notes
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -378,7 +378,7 @@ router.delete('/programs/:id/items/:itemId', requirePermission(Permission.HEP_ED
   try {
     // Verify program exists and belongs to this clinic
     const programCheck = await query(
-      `SELECT id FROM hep_programs WHERE id = $1 AND clinic_id = $2`,
+      `SELECT id FROM exercise_programs WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
     if (programCheck.rows.length === 0) {
@@ -387,7 +387,7 @@ router.delete('/programs/:id/items/:itemId', requirePermission(Permission.HEP_ED
     }
 
     const result = await query(
-      `DELETE FROM hep_program_items WHERE id = $1 AND program_id = $2 RETURNING id`,
+      `DELETE FROM exercise_program_items WHERE id = $1 AND program_id = $2 RETURNING id`,
       [req.params.itemId, req.params.id]
     );
 
@@ -419,7 +419,7 @@ router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), as
 
     // Verify the source program is a template and belongs to this clinic
     const templateResult = await query(
-      `SELECT * FROM hep_programs WHERE id = $1 AND clinic_id = $2 AND is_template = true`,
+      `SELECT * FROM exercise_programs WHERE id = $1 AND clinic_id = $2 AND is_template = true`,
       [req.params.id, req.auth!.clinicId]
     );
     if (templateResult.rows.length === 0) {
@@ -442,7 +442,7 @@ router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), as
     const result = await transaction(async (client) => {
       // Create new program from template
       const newProgram = await client.query(
-        `INSERT INTO hep_programs (
+        `INSERT INTO exercise_programs (
           clinic_id, name, description, patient_id, is_template,
           frequency, duration_weeks, notes, created_by, source_template_id
         ) VALUES ($1,$2,$3,$4,false,$5,$6,$7,$8,$9)
@@ -460,7 +460,7 @@ router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), as
       const templateItems = await client.query(
         `SELECT exercise_id, sort_order, sets, reps, hold_seconds,
                 duration_minutes, resistance, notes
-         FROM hep_program_items
+         FROM exercise_program_items
          WHERE program_id = $1
          ORDER BY sort_order`,
         [req.params.id]
@@ -468,7 +468,7 @@ router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), as
 
       for (const item of templateItems.rows) {
         await client.query(
-          `INSERT INTO hep_program_items (
+          `INSERT INTO exercise_program_items (
             program_id, exercise_id, sort_order, sets, reps,
             hold_seconds, duration_minutes, resistance, notes
           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -515,7 +515,7 @@ router.post('/programs/:id/send', requirePermission(Permission.HEP_EDIT), async 
       `SELECT hp.*,
               p.first_name as patient_first_name, p.last_name as patient_last_name,
               p.mrn, p.email as patient_email
-       FROM hep_programs hp
+       FROM exercise_programs hp
        JOIN patients p ON hp.patient_id = p.id
        WHERE hp.id = $1 AND hp.clinic_id = $2 AND hp.patient_id IS NOT NULL`,
       [req.params.id, req.auth!.clinicId]
@@ -533,8 +533,8 @@ router.post('/programs/:id/send', requirePermission(Permission.HEP_EDIT), async 
               he.name as exercise_name, he.description as exercise_description,
               he.instructions, he.body_region, he.category, he.difficulty,
               he.video_url, he.image_url
-       FROM hep_program_items hpi
-       JOIN hep_exercises he ON hpi.exercise_id = he.id
+       FROM exercise_program_items hpi
+       JOIN exercises he ON hpi.exercise_id = he.id
        WHERE hpi.program_id = $1
        ORDER BY hpi.sort_order`,
       [req.params.id]
@@ -542,7 +542,7 @@ router.post('/programs/:id/send', requirePermission(Permission.HEP_EDIT), async 
 
     // Mark program as sent
     await query(
-      `UPDATE hep_programs SET status = 'sent', sent_at = NOW() WHERE id = $1 AND clinic_id = $2`,
+      `UPDATE exercise_programs SET status = 'sent', sent_at = NOW() WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
 
@@ -598,7 +598,7 @@ router.post('/programs/:id/adherence', requirePermission(Permission.HEP_EDIT), a
 
     // Verify program exists and belongs to this clinic
     const programCheck = await query(
-      `SELECT id, patient_id FROM hep_programs WHERE id = $1 AND clinic_id = $2`,
+      `SELECT id, patient_id FROM exercise_programs WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
     if (programCheck.rows.length === 0) {
@@ -645,7 +645,7 @@ router.get('/programs/:id/adherence', requirePermission(Permission.HEP_VIEW), as
 
     // Verify program exists and belongs to this clinic
     const programCheck = await query(
-      `SELECT id FROM hep_programs WHERE id = $1 AND clinic_id = $2`,
+      `SELECT id FROM exercise_programs WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
     if (programCheck.rows.length === 0) {
@@ -735,7 +735,7 @@ router.get('/', requirePermission(Permission.HEP_VIEW), async (req: Request, res
     }
 
     const countResult = await query(
-      `SELECT COUNT(*) as total FROM hep_exercises WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total FROM exercises WHERE ${whereClause}`,
       params
     );
 
@@ -743,7 +743,7 @@ router.get('/', requirePermission(Permission.HEP_VIEW), async (req: Request, res
       `SELECT id, name, description, body_region, category, difficulty,
               default_sets, default_reps, default_hold_seconds, default_duration_minutes,
               video_url, image_url, tags, created_at
-       FROM hep_exercises
+       FROM exercises
        WHERE ${whereClause}
        ORDER BY name
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -770,7 +770,7 @@ router.post('/', requirePermission(Permission.HEP_CREATE), async (req: Request, 
     const input = exerciseSchema.parse(req.body);
 
     const result = await query(
-      `INSERT INTO hep_exercises (
+      `INSERT INTO exercises (
         clinic_id, name, description, instructions, body_region, category, difficulty,
         default_sets, default_reps, default_hold_seconds, default_duration_minutes,
         video_url, image_url, tags, created_by
@@ -811,7 +811,7 @@ router.post('/', requirePermission(Permission.HEP_CREATE), async (req: Request, 
 router.get('/:id', requirePermission(Permission.HEP_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT * FROM hep_exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
+      `SELECT * FROM exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
       [req.params.id, req.auth!.clinicId]
     );
     if (result.rows.length === 0) {
@@ -861,7 +861,7 @@ router.put('/:id', requirePermission(Permission.HEP_EDIT), async (req: Request, 
     }
 
     const result = await query(
-      `UPDATE hep_exercises SET ${fields.join(', ')} WHERE id = $1 AND clinic_id = $2 AND is_active = true RETURNING id`,
+      `UPDATE exercises SET ${fields.join(', ')} WHERE id = $1 AND clinic_id = $2 AND is_active = true RETURNING id`,
       [req.params.id, req.auth!.clinicId, ...values]
     );
 
@@ -894,7 +894,7 @@ router.put('/:id', requirePermission(Permission.HEP_EDIT), async (req: Request, 
 router.delete('/:id', requirePermission(Permission.HEP_DELETE), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `UPDATE hep_exercises SET is_active = false WHERE id = $1 AND clinic_id = $2 AND is_active = true RETURNING id`,
+      `UPDATE exercises SET is_active = false WHERE id = $1 AND clinic_id = $2 AND is_active = true RETURNING id`,
       [req.params.id, req.auth!.clinicId]
     );
 
