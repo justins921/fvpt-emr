@@ -2,14 +2,52 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-const NAV_ITEMS = [
-  { path: '/', label: 'Dashboard', icon: '□', shortcut: 'Alt+H' },
-  { path: '/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
-  { path: '/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
-  { path: '/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
-  { path: '/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
-  { path: '/support', label: 'Support', icon: '?', shortcut: '' },
-  { path: '/admin', label: 'Admin', icon: '⚙', shortcut: '' },
+const NAV_SECTIONS = [
+  {
+    label: 'Core',
+    items: [
+      { path: '/', label: 'Dashboard', icon: '□', shortcut: 'Alt+H' },
+      { path: '/schedule', label: 'Schedule', icon: '▦', shortcut: 'Alt+S' },
+      { path: '/patients', label: 'Patients', icon: '♦', shortcut: 'Alt+P' },
+      { path: '/billing', label: 'Billing', icon: '$', shortcut: 'Alt+B' },
+      { path: '/messages', label: 'Messages', icon: '\u2709', shortcut: 'Alt+M' },
+    ],
+  },
+  {
+    label: 'Clinical',
+    items: [
+      { path: '/exercises', label: 'Exercises / HEP', icon: '⚡', shortcut: '' },
+      { path: '/outcome-measures', label: 'Outcomes', icon: '◎', shortcut: '' },
+      { path: '/telehealth', label: 'Telehealth', icon: '◉', shortcut: '' },
+      { path: '/intake-forms', label: 'Intake Forms', icon: '✎', shortcut: '' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { path: '/tasks', label: 'Tasks', icon: '☑', shortcut: '' },
+      { path: '/waitlist', label: 'Waitlist', icon: '⏳', shortcut: '' },
+      { path: '/authorizations', label: 'Authorizations', icon: '✓', shortcut: '' },
+      { path: '/eligibility', label: 'Eligibility', icon: '⚕', shortcut: '' },
+      { path: '/referring-providers', label: 'Ref. Providers', icon: '⇋', shortcut: '' },
+      { path: '/fax', label: 'Fax', icon: '⎙', shortcut: '' },
+      { path: '/reports', label: 'Reports', icon: '▤', shortcut: '' },
+    ],
+  },
+  {
+    label: 'More',
+    items: [
+      { path: '/payments', label: 'Payments', icon: '₹', shortcut: '' },
+      { path: '/workers-comp', label: "Workers' Comp", icon: '⛑', shortcut: '' },
+      { path: '/recall', label: 'Recall', icon: '↺', shortcut: '' },
+      { path: '/portal', label: 'Patient Portal', icon: '⊞', shortcut: '' },
+      { path: '/mips', label: 'MIPS', icon: '★', shortcut: '' },
+      { path: '/locations', label: 'Locations', icon: '⌂', shortcut: '' },
+      { path: '/fhir', label: 'FHIR', icon: '⇄', shortcut: '' },
+      { path: '/support', label: 'Support', icon: '?', shortcut: '' },
+      { path: '/admin', label: 'Admin', icon: '⚙', shortcut: '' },
+    ],
+  },
 ];
 
 export default function Layout() {
@@ -30,7 +68,7 @@ export default function Layout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-primary-800">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-primary-900 font-bold text-sm">OS</div>
           <div>
@@ -39,26 +77,35 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="mt-4 px-2 space-y-1">
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.path}
-              to={item.path}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm min-h-touch transition-colors ${
-                isActive(item.path)
-                  ? 'bg-primary-800 text-white'
-                  : 'text-primary-200 hover:bg-primary-800/50 hover:text-white'
-              }`}
-            >
-              <span className="text-lg w-6 text-center">{item.icon}</span>
-              <span className="flex-1">{item.label}</span>
-              {item.shortcut && <span className="text-xs text-primary-400 hidden xl:block">{item.shortcut}</span>}
-            </Link>
+        <nav className="flex-1 overflow-y-auto mt-2 px-2 space-y-4 pb-4">
+          {NAV_SECTIONS.map(section => (
+            <div key={section.label}>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-400">
+                {section.label}
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map(item => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm min-h-touch transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-primary-800 text-white'
+                        : 'text-primary-200 hover:bg-primary-800/50 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-base w-5 text-center">{item.icon}</span>
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.shortcut && <span className="text-xs text-primary-400 hidden xl:block">{item.shortcut}</span>}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-primary-800">
+        <div className="p-4 border-t border-primary-800">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 bg-primary-700 rounded-full flex items-center justify-center text-sm font-medium">
               {user?.firstName?.[0]}{user?.lastName?.[0]}

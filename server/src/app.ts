@@ -3,7 +3,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config';
 import { securityHeaders, corsMiddleware, apiLimiter, ipAllowlist, errorHandler } from './middleware/security';
 
-// Routes
+// Existing Routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import patientRoutes from './routes/patients';
@@ -17,6 +17,30 @@ import exportRoutes from './routes/exports';
 import importRoutes from './routes/import';
 import supportRoutes from './routes/support';
 import messagingRoutes from './routes/messaging';
+
+// New Feature Routes
+import hepRoutes from './routes/hep';
+import pocRoutes from './routes/plans-of-care';
+import outcomeRoutes from './routes/outcome-measures';
+import intakeRoutes from './routes/intake-forms';
+import eligibilityRoutes from './routes/eligibility';
+import faxRoutes from './routes/fax';
+import telehealthRoutes from './routes/telehealth';
+import waitlistRoutes from './routes/waitlist';
+import taskRoutes from './routes/tasks';
+import recallRoutes from './routes/recall';
+import textExpanderRoutes from './routes/text-expanders';
+import reportingRoutes from './routes/reporting';
+import portalRoutes from './routes/portal';
+import workersCompRoutes from './routes/workers-comp';
+import mipsRoutes from './routes/mips';
+import fhirRoutes from './routes/fhir';
+import locationRoutes from './routes/locations';
+import statementRoutes from './routes/statements';
+import paymentRoutes from './routes/payments';
+import authorizationRoutes from './routes/authorizations';
+import noteUtilRoutes from './routes/note-utils';
+import referringProviderRoutes from './routes/referring-providers';
 
 const app = express();
 
@@ -46,7 +70,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// API routes
+// ── Existing API routes ──
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/patients', patientRoutes);
@@ -60,6 +84,30 @@ app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/messaging', messagingRoutes);
+
+// ── New Feature API routes ──
+app.use('/api/exercises', hepRoutes);
+app.use('/api/plans-of-care', pocRoutes);
+app.use('/api/outcome-measures', outcomeRoutes);
+app.use('/api/intake-forms', intakeRoutes);
+app.use('/api/eligibility', eligibilityRoutes);
+app.use('/api/fax', faxRoutes);
+app.use('/api/telehealth', telehealthRoutes);
+app.use('/api/waitlist', waitlistRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/recall', recallRoutes);
+app.use('/api/text-expanders', textExpanderRoutes);
+app.use('/api/reporting', reportingRoutes);
+app.use('/api/portal', portalRoutes);
+app.use('/api/workers-comp', workersCompRoutes);
+app.use('/api/mips', mipsRoutes);
+app.use('/api/fhir', fhirRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/statements', statementRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/authorizations', authorizationRoutes);
+app.use('/api/note-utils', noteUtilRoutes);
+app.use('/api/referring-providers', referringProviderRoutes);
 
 // 404 handler for API routes
 app.use('/api', (_req, res) => {

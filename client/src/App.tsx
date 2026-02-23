@@ -14,6 +14,26 @@ import AdminPage from './pages/AdminPage';
 import SupportPage from './pages/SupportPage';
 import MessagingPage from './pages/MessagingPage';
 
+// New feature pages
+import HEPPage from './pages/HEPPage';
+import OutcomeMeasuresPage from './pages/OutcomeMeasuresPage';
+import IntakeFormsPage from './pages/IntakeFormsPage';
+import WaitlistPage from './pages/WaitlistPage';
+import TasksPage from './pages/TasksPage';
+import RecallPage from './pages/RecallPage';
+import ReportingPage from './pages/ReportingPage';
+import TelehealthPage from './pages/TelehealthPage';
+import FaxPage from './pages/FaxPage';
+import EligibilityPage from './pages/EligibilityPage';
+import PortalPage from './pages/PortalPage';
+import WorkersCompPage from './pages/WorkersCompPage';
+import MIPSPage from './pages/MIPSPage';
+import FHIRPage from './pages/FHIRPage';
+import LocationsPage from './pages/LocationsPage';
+import PaymentsPage from './pages/PaymentsPage';
+import AuthorizationsPage from './pages/AuthorizationsPage';
+import ReferringProvidersPage from './pages/ReferringProvidersPage';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) {
@@ -47,6 +67,26 @@ export default function App() {
         <Route path="messages" element={<MessagingPage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="admin/*" element={<AdminPage />} />
+
+        {/* New feature routes */}
+        <Route path="exercises/*" element={<HEPPage />} />
+        <Route path="outcome-measures" element={<OutcomeMeasuresPage />} />
+        <Route path="intake-forms/*" element={<IntakeFormsPage />} />
+        <Route path="waitlist" element={<WaitlistPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="recall/*" element={<RecallPage />} />
+        <Route path="reports/*" element={<ReportingPage />} />
+        <Route path="telehealth/*" element={<TelehealthPage />} />
+        <Route path="fax" element={<FaxPage />} />
+        <Route path="eligibility" element={<EligibilityPage />} />
+        <Route path="portal/*" element={<PortalPage />} />
+        <Route path="workers-comp/*" element={<WorkersCompPage />} />
+        <Route path="mips" element={<MIPSPage />} />
+        <Route path="fhir" element={<FHIRPage />} />
+        <Route path="locations" element={<LocationsPage />} />
+        <Route path="payments/*" element={<PaymentsPage />} />
+        <Route path="authorizations" element={<AuthorizationsPage />} />
+        <Route path="referring-providers" element={<ReferringProvidersPage />} />
       </Route>
     </Routes>
   );

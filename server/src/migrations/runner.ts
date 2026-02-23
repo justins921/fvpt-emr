@@ -20,6 +20,7 @@ async function run() {
       { name: '003_email_to_username', module: await import('./003_email_to_username') },
       { name: '004_add_dev_role_and_support', module: await import('./004_add_dev_role_and_support') },
       { name: '005_add_messaging', module: await import('./005_add_messaging') },
+      { name: '006_add_all_features', module: await import('./006_add_all_features') },
     ];
 
     if (direction === 'up') {

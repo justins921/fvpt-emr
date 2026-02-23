@@ -74,6 +74,90 @@ export enum Permission {
   // Admin
   BACKUP_MANAGE = 'backup:manage',
   SETTINGS_MANAGE = 'settings:manage',
+
+  // ── New Permissions ──
+
+  // HEP / Exercises
+  HEP_VIEW = 'hep:view',
+  HEP_CREATE = 'hep:create',
+  HEP_EDIT = 'hep:edit',
+  HEP_DELETE = 'hep:delete',
+
+  // Plan of Care
+  POC_VIEW = 'poc:view',
+  POC_CREATE = 'poc:create',
+  POC_EDIT = 'poc:edit',
+
+  // Outcome Measures
+  OUTCOME_VIEW = 'outcome:view',
+  OUTCOME_CREATE = 'outcome:create',
+
+  // Intake Forms
+  INTAKE_VIEW = 'intake:view',
+  INTAKE_CREATE = 'intake:create',
+  INTAKE_MANAGE = 'intake:manage',
+
+  // Eligibility
+  ELIGIBILITY_CHECK = 'eligibility:check',
+  ELIGIBILITY_VIEW = 'eligibility:view',
+
+  // Fax
+  FAX_SEND = 'fax:send',
+  FAX_VIEW = 'fax:view',
+
+  // Telehealth
+  TELEHEALTH_CREATE = 'telehealth:create',
+  TELEHEALTH_VIEW = 'telehealth:view',
+
+  // Waitlist
+  WAITLIST_VIEW = 'waitlist:view',
+  WAITLIST_MANAGE = 'waitlist:manage',
+
+  // Tasks
+  TASK_VIEW = 'task:view',
+  TASK_CREATE = 'task:create',
+  TASK_MANAGE = 'task:manage',
+
+  // Recall Campaigns
+  RECALL_VIEW = 'recall:view',
+  RECALL_MANAGE = 'recall:manage',
+
+  // Workers Comp
+  WORKERS_COMP_VIEW = 'workers_comp:view',
+  WORKERS_COMP_MANAGE = 'workers_comp:manage',
+
+  // Portal
+  PORTAL_MANAGE = 'portal:manage',
+
+  // Payments
+  PAYMENT_VIEW = 'payment:view',
+  PAYMENT_PROCESS = 'payment:process',
+
+  // Reporting
+  REPORT_VIEW = 'report:view',
+
+  // Locations
+  LOCATION_VIEW = 'location:view',
+  LOCATION_MANAGE = 'location:manage',
+
+  // MIPS
+  MIPS_VIEW = 'mips:view',
+  MIPS_MANAGE = 'mips:manage',
+
+  // FHIR
+  FHIR_MANAGE = 'fhir:manage',
+
+  // Referring Providers
+  REFERRING_PROVIDER_VIEW = 'referring_provider:view',
+  REFERRING_PROVIDER_MANAGE = 'referring_provider:manage',
+
+  // Text Expanders
+  TEXT_EXPANDER_VIEW = 'text_expander:view',
+  TEXT_EXPANDER_MANAGE = 'text_expander:manage',
+
+  // Authorizations
+  AUTHORIZATION_VIEW = 'authorization:view',
+  AUTHORIZATION_MANAGE = 'authorization:manage',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -100,6 +184,31 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SUPPORT_CREATE,
     Permission.MESSAGING_VIEW,
     Permission.MESSAGING_SEND,
+    Permission.HEP_VIEW,
+    Permission.HEP_CREATE,
+    Permission.HEP_EDIT,
+    Permission.POC_VIEW,
+    Permission.POC_CREATE,
+    Permission.POC_EDIT,
+    Permission.OUTCOME_VIEW,
+    Permission.OUTCOME_CREATE,
+    Permission.INTAKE_VIEW,
+    Permission.ELIGIBILITY_VIEW,
+    Permission.FAX_SEND,
+    Permission.FAX_VIEW,
+    Permission.TELEHEALTH_CREATE,
+    Permission.TELEHEALTH_VIEW,
+    Permission.WAITLIST_VIEW,
+    Permission.WAITLIST_MANAGE,
+    Permission.TASK_VIEW,
+    Permission.TASK_CREATE,
+    Permission.WORKERS_COMP_VIEW,
+    Permission.REPORT_VIEW,
+    Permission.LOCATION_VIEW,
+    Permission.REFERRING_PROVIDER_VIEW,
+    Permission.TEXT_EXPANDER_VIEW,
+    Permission.TEXT_EXPANDER_MANAGE,
+    Permission.AUTHORIZATION_VIEW,
   ],
   [Role.FRONT_DESK]: [
     Permission.CLINIC_VIEW,
@@ -117,6 +226,22 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SUPPORT_CREATE,
     Permission.MESSAGING_VIEW,
     Permission.MESSAGING_SEND,
+    Permission.INTAKE_VIEW,
+    Permission.INTAKE_CREATE,
+    Permission.ELIGIBILITY_CHECK,
+    Permission.ELIGIBILITY_VIEW,
+    Permission.FAX_SEND,
+    Permission.FAX_VIEW,
+    Permission.WAITLIST_VIEW,
+    Permission.WAITLIST_MANAGE,
+    Permission.TASK_VIEW,
+    Permission.TASK_CREATE,
+    Permission.PAYMENT_VIEW,
+    Permission.PAYMENT_PROCESS,
+    Permission.LOCATION_VIEW,
+    Permission.REFERRING_PROVIDER_VIEW,
+    Permission.AUTHORIZATION_VIEW,
+    Permission.AUTHORIZATION_MANAGE,
   ],
   [Role.BILLER]: [
     Permission.CLINIC_VIEW,
@@ -136,6 +261,17 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
     Permission.MESSAGING_VIEW,
+    Permission.ELIGIBILITY_CHECK,
+    Permission.ELIGIBILITY_VIEW,
+    Permission.PAYMENT_VIEW,
+    Permission.PAYMENT_PROCESS,
+    Permission.REPORT_VIEW,
+    Permission.AUTHORIZATION_VIEW,
+    Permission.AUTHORIZATION_MANAGE,
+    Permission.WORKERS_COMP_VIEW,
+    Permission.WORKERS_COMP_MANAGE,
+    Permission.MIPS_VIEW,
+    Permission.MIPS_MANAGE,
   ],
   [Role.READ_ONLY]: [
     Permission.CLINIC_VIEW,
@@ -149,6 +285,22 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.USER_VIEW,
     Permission.SUPPORT_CREATE,
     Permission.MESSAGING_VIEW,
+    Permission.HEP_VIEW,
+    Permission.POC_VIEW,
+    Permission.OUTCOME_VIEW,
+    Permission.INTAKE_VIEW,
+    Permission.ELIGIBILITY_VIEW,
+    Permission.FAX_VIEW,
+    Permission.TELEHEALTH_VIEW,
+    Permission.WAITLIST_VIEW,
+    Permission.TASK_VIEW,
+    Permission.RECALL_VIEW,
+    Permission.WORKERS_COMP_VIEW,
+    Permission.PAYMENT_VIEW,
+    Permission.REPORT_VIEW,
+    Permission.LOCATION_VIEW,
+    Permission.REFERRING_PROVIDER_VIEW,
+    Permission.AUTHORIZATION_VIEW,
   ],
 };
 
@@ -235,6 +387,7 @@ export interface Patient {
   referral_source: string | null;
   referring_provider: string | null;
   referring_provider_npi: string | null;
+  referring_provider_id: string | null;
   primary_diagnosis_icd10: string | null;
   secondary_diagnoses_icd10: string[];
   precautions: string | null;
@@ -277,6 +430,7 @@ export interface Appointment {
   status: AppointmentStatus;
   notes: string | null;
   recurring_rule: string | null;
+  location_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -510,6 +664,84 @@ export enum AuditAction {
   SETTINGS_CHANGE = 'settings.change',
   BACKUP_CREATE = 'backup.create',
   BACKUP_RESTORE = 'backup.restore',
+
+  // ── New Audit Actions ──
+
+  // HEP
+  HEP_EXERCISE_CREATE = 'hep.exercise_create',
+  HEP_EXERCISE_EDIT = 'hep.exercise_edit',
+  HEP_PROGRAM_CREATE = 'hep.program_create',
+  HEP_PROGRAM_EDIT = 'hep.program_edit',
+  HEP_PROGRAM_ASSIGN = 'hep.program_assign',
+
+  // Plan of Care
+  POC_CREATE = 'poc.create',
+  POC_EDIT = 'poc.edit',
+  POC_SIGN = 'poc.sign',
+
+  // Outcome Measures
+  OUTCOME_CREATE = 'outcome.create',
+
+  // Intake Forms
+  INTAKE_TEMPLATE_CREATE = 'intake.template_create',
+  INTAKE_SUBMIT = 'intake.submit',
+  INTAKE_REVIEW = 'intake.review',
+
+  // Eligibility
+  ELIGIBILITY_CHECK = 'eligibility.check',
+
+  // Fax
+  FAX_SEND = 'fax.send',
+  FAX_RECEIVE = 'fax.receive',
+
+  // Telehealth
+  TELEHEALTH_CREATE = 'telehealth.create',
+  TELEHEALTH_START = 'telehealth.start',
+  TELEHEALTH_END = 'telehealth.end',
+
+  // Waitlist
+  WAITLIST_ADD = 'waitlist.add',
+  WAITLIST_UPDATE = 'waitlist.update',
+
+  // Tasks
+  TASK_CREATE = 'task.create',
+  TASK_UPDATE = 'task.update',
+  TASK_COMPLETE = 'task.complete',
+
+  // Recall
+  RECALL_CREATE = 'recall.create',
+  RECALL_SEND = 'recall.send',
+
+  // Workers Comp
+  WC_CASE_CREATE = 'wc.case_create',
+  WC_CASE_EDIT = 'wc.case_edit',
+
+  // Portal
+  PORTAL_USER_CREATE = 'portal.user_create',
+  PORTAL_MESSAGE_SEND = 'portal.message_send',
+
+  // Payments
+  PAYMENT_PROCESS = 'payment.process',
+  PAYMENT_REFUND = 'payment.refund',
+
+  // Locations
+  LOCATION_CREATE = 'location.create',
+  LOCATION_EDIT = 'location.edit',
+
+  // MIPS
+  MIPS_RECORD = 'mips.record',
+  MIPS_SUBMIT = 'mips.submit',
+
+  // FHIR
+  FHIR_SYNC = 'fhir.sync',
+
+  // Referring Providers
+  REFERRING_PROVIDER_CREATE = 'referring_provider.create',
+  REFERRING_PROVIDER_EDIT = 'referring_provider.edit',
+
+  // Authorization
+  AUTHORIZATION_CREATE = 'authorization.create',
+  AUTHORIZATION_EDIT = 'authorization.edit',
 }
 
 export interface AuditEvent {
@@ -538,6 +770,63 @@ export interface ClearinghouseAdapter {
 export interface TranscriptionProvider {
   transcribe(audioBuffer: Buffer, mimeType: string): Promise<{ text: string; confidence: number }>;
   isAvailable(): Promise<boolean>;
+}
+
+// ── Fax Provider ──
+export interface FaxProvider {
+  sendFax(to: string, documentUrl: string, coverPage?: string): Promise<{ messageId: string; status: string }>;
+  getStatus(messageId: string): Promise<{ status: string; pages: number; error?: string }>;
+}
+
+// ── Payment Processor ──
+export interface PaymentProcessor {
+  createCustomer(patientId: string, email: string): Promise<{ customerId: string }>;
+  tokenizeCard(customerId: string, cardDetails: Record<string, string>): Promise<{ token: string; last4: string; brand: string; expMonth: number; expYear: number }>;
+  charge(token: string, amountCents: number, description: string): Promise<{ transactionId: string; status: string }>;
+  refund(transactionId: string, amountCents?: number): Promise<{ refundId: string; status: string }>;
+}
+
+// ── 8-Minute Rule Types ──
+export interface TimedCPTEntry {
+  cptCode: string;
+  minutes: number;
+}
+
+export interface EightMinuteRuleResult {
+  entries: Array<{
+    cptCode: string;
+    minutes: number;
+    units: number;
+  }>;
+  totalMinutes: number;
+  totalUnits: number;
+}
+
+// ── Outcome Measure Definitions ──
+export enum OutcomeMeasureType {
+  LEFS = 'LEFS',
+  DASH = 'DASH',
+  NDI = 'NDI',
+  OSWESTRY = 'Oswestry',
+  SPADI = 'SPADI',
+  BERG_BALANCE = 'Berg Balance',
+  NPRS = 'NPRS',
+  PSFS = 'PSFS',
+  QUICK_DASH = 'QuickDASH',
+  PHQ9 = 'PHQ-9',
+  GAD7 = 'GAD-7',
+  CUSTOM = 'Custom',
+}
+
+// ── Body Chart Region Types ──
+export interface BodyChartMarker {
+  id: string;
+  x: number;
+  y: number;
+  region: string;
+  painType: 'sharp' | 'dull' | 'burning' | 'aching' | 'tingling' | 'numbness';
+  intensity: number;
+  notes: string;
 }
 
 // ── API Response ──
