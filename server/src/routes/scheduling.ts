@@ -11,6 +11,7 @@ router.use(authenticate, validateSession, tenantScope);
 const appointmentSchema = z.object({
   patientId: z.string().uuid(),
   therapistId: z.string().uuid(),
+  locationId: z.string().uuid().optional().nullable(),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   appointmentType: z.nativeEnum(AppointmentType),
@@ -21,7 +22,7 @@ const appointmentSchema = z.object({
 // Get appointments for date range
 router.get('/', requirePermission(Permission.SCHEDULE_VIEW), async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, therapistId } = req.query;
+    const { startDate, endDate, therapistId, locationId } = req.query;
     if (!startDate || !endDate) {
       res.status(400).json({ success: false, error: 'startDate and endDate required' });
       return;
@@ -30,17 +31,24 @@ router.get('/', requirePermission(Permission.SCHEDULE_VIEW), async (req: Request
     let sql = `
       SELECT a.*,
         p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn,
-        u.first_name as therapist_first_name, u.last_name as therapist_last_name, u.credential as therapist_credential
+        u.first_name as therapist_first_name, u.last_name as therapist_last_name, u.credential as therapist_credential,
+        cl.name as location_name
       FROM appointments a
       JOIN patients p ON a.patient_id = p.id
       JOIN users u ON a.therapist_id = u.id
+      LEFT JOIN clinic_locations cl ON a.location_id = cl.id
       WHERE a.clinic_id = $1 AND a.start_time >= $2 AND a.end_time <= $3
     `;
     const params: unknown[] = [req.auth!.clinicId, startDate, endDate];
+    let paramIdx = 4;
 
     if (therapistId) {
-      sql += ` AND a.therapist_id = $4`;
+      sql += ` AND a.therapist_id = $${paramIdx++}`;
       params.push(therapistId);
+    }
+    if (locationId) {
+      sql += ` AND a.location_id = $${paramIdx++}`;
+      params.push(locationId);
     }
     sql += ` ORDER BY a.start_time`;
 
@@ -92,9 +100,9 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
     }
 
     const result = await query(
-      `INSERT INTO appointments (clinic_id, patient_id, therapist_id, start_time, end_time, appointment_type, notes, recurring_rule)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [req.auth!.clinicId, input.patientId, input.therapistId, input.startTime, input.endTime, input.appointmentType, input.notes || null, input.recurringRule || null]
+      `INSERT INTO appointments (clinic_id, patient_id, therapist_id, location_id, start_time, end_time, appointment_type, notes, recurring_rule)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [req.auth!.clinicId, input.patientId, input.therapistId, input.locationId || null, input.startTime, input.endTime, input.appointmentType, input.notes || null, input.recurringRule || null]
     );
 
     await logAudit({
@@ -161,8 +169,9 @@ router.put('/:id', requirePermission(Permission.SCHEDULE_EDIT), async (req: Requ
 
     const fieldMap: Record<string, string> = {
       patientId: 'patient_id', therapistId: 'therapist_id',
-      startTime: 'start_time', endTime: 'end_time',
-      appointmentType: 'appointment_type', notes: 'notes',
+      locationId: 'location_id', startTime: 'start_time',
+      endTime: 'end_time', appointmentType: 'appointment_type',
+      notes: 'notes',
     };
 
     for (const [key, value] of Object.entries(input)) {

@@ -1,5 +1,8 @@
 import { useState, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+
+const isDev = import.meta.env.DEV;
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -47,7 +50,7 @@ export default function LoginPage() {
               value={username}
               onChange={e => setUsername(e.target.value)}
               className="input"
-              placeholder="admin"
+              placeholder="Enter your username"
               required
               autoComplete="username"
             />
@@ -71,14 +74,21 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
 
-          <p className="text-xs text-slate-400 text-center mt-4">
-            Demo: admin / password123!
-          </p>
+          {isDev && (
+            <p className="text-xs text-slate-400 text-center mt-4">
+              Demo: admin / password123!
+            </p>
+          )}
         </form>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
-          Secure EMR · Sobojinski Solutions
-        </p>
+        <div className="text-center mt-6 space-y-2">
+          <p className="text-xs text-slate-400">
+            Secure EMR &middot; Sobojinski Solutions
+          </p>
+          <Link to="/" className="text-xs text-primary-600 hover:underline">
+            &larr; Back to home
+          </Link>
+        </div>
       </div>
     </div>
   );

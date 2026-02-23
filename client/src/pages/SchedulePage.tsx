@@ -5,11 +5,13 @@ import { format, addDays, addMonths, startOfWeek, endOfWeek, startOfMonth, endOf
 
 interface Appointment {
   id: string; patient_id: string; therapist_id: string;
+  location_id: string | null;
   start_time: string; end_time: string;
   appointment_type: string; status: string; notes: string;
   patient_first_name: string; patient_last_name: string; mrn: string;
   therapist_first_name: string; therapist_last_name: string;
   therapist_credential: string | null;
+  location_name: string | null;
 }
 
 interface Provider {
@@ -18,6 +20,13 @@ interface Provider {
   last_name: string;
   credential: string | null;
   role: string;
+}
+
+interface Location {
+  id: string;
+  name: string;
+  is_primary: boolean;
+  is_active: boolean;
 }
 
 /** Credentials that can have their own schedule column */
@@ -50,6 +59,8 @@ export default function SchedulePage() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
   const [allTherapists, setAllTherapists] = useState<Provider[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [mobileProviderId, setMobileProviderId] = useState<string>('all');
 
   // Scheduling providers = users with PT, DPT, or ATC credential
@@ -65,7 +76,7 @@ export default function SchedulePage() {
     }
   }, [providers]);
 
-  useEffect(() => { loadData(); }, [currentDate, view]);
+  useEffect(() => { loadData(); }, [currentDate, view, selectedLocationId]);
 
   async function loadData() {
     setLoading(true);
@@ -84,10 +95,12 @@ export default function SchedulePage() {
         end.setHours(23, 59, 59, 999);
       }
 
-      const [apptRes, patRes, userRes] = await Promise.all([
-        api.get<any>(`/scheduling?startDate=${start.toISOString()}&endDate=${end.toISOString()}`),
+      const locationParam = selectedLocationId !== 'all' ? `&locationId=${selectedLocationId}` : '';
+      const [apptRes, patRes, userRes, locRes] = await Promise.all([
+        api.get<any>(`/scheduling?startDate=${start.toISOString()}&endDate=${end.toISOString()}${locationParam}`),
         api.get<any>('/patients?limit=100'),
         api.get<any>('/users'),
+        api.get<any>('/locations'),
       ]);
 
       setAppointments(apptRes.data || []);
@@ -97,6 +110,7 @@ export default function SchedulePage() {
           ['therapist', 'owner', 'admin'].includes(u.role) && u.is_active
         )
       );
+      setLocations((locRes.data || []).filter((l: Location) => l.is_active));
     } catch {} finally { setLoading(false); }
   }
 
@@ -107,9 +121,11 @@ export default function SchedulePage() {
     const startTime = fd.get('startTime') as string;
     const endTime = fd.get('endTime') as string;
     try {
+      const locationId = fd.get('locationId') as string;
       await api.post('/scheduling', {
         patientId: fd.get('patientId'),
         therapistId: fd.get('therapistId'),
+        locationId: locationId || null,
         startTime: `${date}T${startTime}:00.000Z`,
         endTime: `${date}T${endTime}:00.000Z`,
         appointmentType: fd.get('appointmentType'),
@@ -140,12 +156,13 @@ export default function SchedulePage() {
     return (
       <div className={`text-xs p-1.5 rounded mb-1 border ${statusClasses(appt.status)}`}>
         <div className="font-medium">
-          <Link to={`/patients/${appt.patient_id}`} className="hover:underline">
+          <Link to={`/app/patients/${appt.patient_id}`} className="hover:underline">
             {appt.patient_last_name}, {appt.patient_first_name}
           </Link>
         </div>
         <div className="text-slate-500">
           {format(new Date(appt.start_time), 'h:mm')}-{format(new Date(appt.end_time), 'h:mma')}
+          {appt.location_name && <span className="ml-1 text-slate-400">@ {appt.location_name}</span>}
         </div>
         {!compact && (
           <div className="mt-1 flex gap-1 flex-wrap">
@@ -177,6 +194,23 @@ export default function SchedulePage() {
             ))}
           </div>
         </div>
+
+        {/* Location filter (shown when clinic has multiple locations) */}
+        {locations.length > 1 && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500 whitespace-nowrap">Location:</label>
+            <select
+              value={selectedLocationId}
+              onChange={e => setSelectedLocationId(e.target.value)}
+              className="input text-sm py-1"
+            >
+              <option value="all">All Locations</option>
+              {locations.map(loc => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Mobile provider picker (day view only, shown on small screens) */}
         {view === 'day' && (
@@ -223,6 +257,15 @@ export default function SchedulePage() {
               <option value="discharge">Discharge</option>
             </select>
           </div>
+          {locations.length > 0 && (
+            <div>
+              <label className="label">Location</label>
+              <select name="locationId" className="input" defaultValue={selectedLocationId !== 'all' ? selectedLocationId : ''}>
+                <option value="">No location</option>
+                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+              </select>
+            </div>
+          )}
           <div><label className="label">Date *</label><input name="date" type="date" required className="input" defaultValue={format(currentDate, 'yyyy-MM-dd')} /></div>
           <div><label className="label">Start Time *</label><input name="startTime" type="time" required className="input" defaultValue="09:00" /></div>
           <div><label className="label">End Time *</label><input name="endTime" type="time" required className="input" defaultValue="09:45" /></div>

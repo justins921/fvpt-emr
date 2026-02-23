@@ -28,7 +28,7 @@ const locationSchema = z.object({
 router.get('/', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT * FROM locations
+      `SELECT * FROM clinic_locations
        WHERE clinic_id = $1
        ORDER BY is_primary DESC, name ASC`,
       [req.auth!.clinicId]
@@ -44,7 +44,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT * FROM locations
+      `SELECT * FROM clinic_locations
        WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
     );
@@ -68,13 +68,13 @@ router.post('/', requirePermission(Permission.LOCATION_MANAGE), async (req: Requ
     // If this location is primary, unset any existing primary
     if (input.is_primary) {
       await query(
-        `UPDATE locations SET is_primary = false WHERE clinic_id = $1 AND is_primary = true`,
+        `UPDATE clinic_locations SET is_primary = false WHERE clinic_id = $1 AND is_primary = true`,
         [req.auth!.clinicId]
       );
     }
 
     const result = await query(
-      `INSERT INTO locations (clinic_id, name, address_line1, address_line2, city, state, zip, phone, fax, npi, is_primary, timezone, operating_hours)
+      `INSERT INTO clinic_locations (clinic_id, name, address_line1, address_line2, city, state, zip, phone, fax, npi, is_primary, timezone, operating_hours)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING id`,
       [
@@ -154,7 +154,7 @@ router.put('/:id', requirePermission(Permission.LOCATION_MANAGE), async (req: Re
     // If setting this as primary, unset the existing primary first
     if (input.is_primary) {
       await query(
-        `UPDATE locations SET is_primary = false WHERE clinic_id = $1 AND is_primary = true AND id != $2`,
+        `UPDATE clinic_locations SET is_primary = false WHERE clinic_id = $1 AND is_primary = true AND id != $2`,
         [req.auth!.clinicId, req.params.id]
       );
     }
@@ -162,7 +162,7 @@ router.put('/:id', requirePermission(Permission.LOCATION_MANAGE), async (req: Re
     fields.push(`updated_at = NOW()`);
 
     const result = await query(
-      `UPDATE locations SET ${fields.join(', ')}
+      `UPDATE clinic_locations SET ${fields.join(', ')}
        WHERE id = $1 AND clinic_id = $2
        RETURNING id`,
       [req.params.id, req.auth!.clinicId, ...values]
@@ -197,7 +197,7 @@ router.put('/:id', requirePermission(Permission.LOCATION_MANAGE), async (req: Re
 router.put('/:id/deactivate', requirePermission(Permission.LOCATION_MANAGE), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `UPDATE locations SET is_active = false, updated_at = NOW()
+      `UPDATE clinic_locations SET is_active = false, updated_at = NOW()
        WHERE id = $1 AND clinic_id = $2
        RETURNING id`,
       [req.params.id, req.auth!.clinicId]
