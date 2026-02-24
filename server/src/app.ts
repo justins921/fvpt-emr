@@ -1,7 +1,8 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { config } from './config';
-import { securityHeaders, corsMiddleware, apiLimiter, ipAllowlist, errorHandler } from './middleware/security';
+import { securityHeaders, corsMiddleware, apiLimiter, ipAllowlist, errorHandler, permissionsPolicy } from './middleware/security';
+import { checkHealth } from './db';
 
 // Existing Routes
 import authRoutes from './routes/auth';
@@ -51,6 +52,7 @@ if (config.TRUST_PROXY) {
 
 // Global middleware
 app.use(securityHeaders);
+app.use(permissionsPolicy);
 app.use(corsMiddleware);
 app.use(ipAllowlist);
 app.use(express.json({ limit: '10mb' }));
@@ -59,13 +61,18 @@ app.use(cookieParser());
 app.use('/api', apiLimiter);
 
 // Health check (no auth required, no PHI)
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
+app.get('/api/health', async (_req, res) => {
+  const db = await checkHealth();
+  const status = db.ok ? 'healthy' : 'degraded';
+  const httpCode = db.ok ? 200 : 503;
+  res.status(httpCode).json({
+    success: db.ok,
     data: {
-      status: 'healthy',
+      status,
       version: process.env.npm_package_version || '0.1.0',
       timestamp: new Date().toISOString(),
+      database: { connected: db.ok, latencyMs: db.latencyMs },
+      uptime: Math.floor(process.uptime()),
     },
   });
 });

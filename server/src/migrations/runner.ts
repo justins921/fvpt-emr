@@ -21,6 +21,7 @@ async function run() {
       { name: '004_add_dev_role_and_support', module: await import('./004_add_dev_role_and_support') },
       { name: '005_add_messaging', module: await import('./005_add_messaging') },
       { name: '006_add_all_features', module: await import('./006_add_all_features') },
+      { name: '007_security_hardening', module: await import('./007_security_hardening') },
     ];
 
     if (direction === 'up') {

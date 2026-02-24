@@ -163,7 +163,10 @@ export enum Permission {
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.OWNER]: Object.values(Permission),
   [Role.ADMIN]: Object.values(Permission),
-  [Role.DEV]: Object.values(Permission),
+  // DEV role only has permissions in development — in production it's read-only
+  [Role.DEV]: process.env.NODE_ENV === 'production'
+    ? [Permission.CLINIC_VIEW, Permission.PATIENT_VIEW, Permission.SCHEDULE_VIEW, Permission.NOTE_VIEW, Permission.SUPPORT_CREATE]
+    : Object.values(Permission),
   [Role.THERAPIST]: [
     Permission.CLINIC_VIEW,
     Permission.PATIENT_CREATE,

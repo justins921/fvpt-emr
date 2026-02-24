@@ -8,23 +8,16 @@ interface RequestOptions {
 
 class ApiClient {
   private accessToken: string | null = null;
-  private refreshToken: string | null = null;
   private refreshPromise: Promise<boolean> | null = null;
 
-  setTokens(accessToken: string, refreshToken: string) {
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    localStorage.setItem('refreshToken', refreshToken);
+  /** Store only the access token in memory (short-lived). Refresh token lives in HTTP-only cookie. */
+  setAccessToken(token: string) {
+    this.accessToken = token;
   }
 
   clearTokens() {
     this.accessToken = null;
-    this.refreshToken = null;
-    localStorage.removeItem('refreshToken');
-  }
-
-  getStoredRefreshToken(): string | null {
-    return this.refreshToken || localStorage.getItem('refreshToken');
+    // Refresh token cookie is cleared server-side on logout
   }
 
   async request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -45,16 +38,18 @@ class ApiClient {
     const response = await fetch(`${API_BASE}${path}`, {
       method,
       headers: reqHeaders,
+      credentials: 'include', // Always send cookies (refresh token)
       body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     });
 
-    if (response.status === 401 && this.getStoredRefreshToken()) {
+    if (response.status === 401) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
         reqHeaders['Authorization'] = `Bearer ${this.accessToken}`;
         const retryResponse = await fetch(`${API_BASE}${path}`, {
           method,
           headers: reqHeaders,
+          credentials: 'include',
           body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
         });
         if (!retryResponse.ok) {
@@ -82,20 +77,18 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        const rt = this.getStoredRefreshToken();
-        if (!rt) return false;
-
+        // Refresh token is in HTTP-only cookie — sent automatically via credentials: 'include'
         const response = await fetch(`${API_BASE}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: rt }),
+          credentials: 'include',
         });
 
         if (!response.ok) return false;
 
         const data = await response.json();
-        if (data.success && data.data) {
-          this.setTokens(data.data.accessToken, data.data.refreshToken);
+        if (data.success && data.data?.accessToken) {
+          this.accessToken = data.data.accessToken;
           return true;
         }
         return false;

@@ -8,6 +8,7 @@ import { query } from '../db';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
 import { config } from '../config';
+import { encryptFile, decryptFile } from '../services/encryption';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -32,7 +33,9 @@ const diskStorage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (_req, file, cb) => {
-    const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${path.extname(file.originalname)}`;
+    // Use .enc extension when encryption is enabled to signal encrypted files
+    const ext = config.ENCRYPT_ATTACHMENTS ? '.enc' : path.extname(file.originalname);
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
     cb(null, uniqueName);
   },
 });
@@ -58,11 +61,20 @@ router.post('/', requirePermission(Permission.ATTACHMENT_UPLOAD), upload.single(
     }
 
     const { patientId, noteId, claimId } = req.body;
-
-    // In serverless mode, files are in memory (req.file.buffer).
-    // In local mode, files are on disk (req.file.path).
-    const storagePath = isServerless ? `memory:${req.file.originalname}` : req.file.path;
     const filename = req.file.filename || `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    let storagePath: string;
+
+    if (isServerless) {
+      storagePath = `memory:${req.file.originalname}`;
+    } else if (config.ENCRYPT_ATTACHMENTS && req.file.path) {
+      // Read the file, encrypt it, write it back
+      const plainBuffer = await fs.readFile(req.file.path);
+      const encryptedBuffer = encryptFile(plainBuffer);
+      await fs.writeFile(req.file.path, encryptedBuffer);
+      storagePath = req.file.path;
+    } else {
+      storagePath = req.file.path || `${config.UPLOAD_DIR}/${filename}`;
+    }
 
     const result = await query(
       `INSERT INTO attachments (clinic_id, patient_id, note_id, claim_id, filename, original_filename, mime_type, size_bytes, storage_path, uploaded_by, scan_status)
@@ -88,7 +100,7 @@ router.post('/', requirePermission(Permission.ATTACHMENT_UPLOAD), upload.single(
       action: AuditAction.ATTACHMENT_UPLOAD,
       resourceType: 'attachment',
       resourceId: result.rows[0].id,
-      details: { mimeType: req.file.mimetype, sizeBytes: req.file.size },
+      details: { mimeType: req.file.mimetype, sizeBytes: req.file.size, encrypted: config.ENCRYPT_ATTACHMENTS },
       req,
     });
 
@@ -146,8 +158,15 @@ router.get('/:id/download', requirePermission(Permission.ATTACHMENT_VIEW), async
     res.setHeader('Content-Type', attachment.mime_type);
     res.setHeader('Content-Disposition', `inline; filename="${attachment.original_filename}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store'); // PHI should not be cached
 
-    const fileBuffer = await fs.readFile(attachment.storage_path);
+    const rawBuffer = await fs.readFile(attachment.storage_path);
+
+    // Decrypt if the file is encrypted (starts with version byte 0x01)
+    const fileBuffer = (rawBuffer.length > 0 && rawBuffer[0] === 0x01 && attachment.storage_path.endsWith('.enc'))
+      ? decryptFile(rawBuffer)
+      : rawBuffer;
+
     res.send(fileBuffer);
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });

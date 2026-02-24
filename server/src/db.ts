@@ -13,7 +13,9 @@ const pool = new Pool({
   max: isServerless ? 3 : 20,
   idleTimeoutMillis: isServerless ? 10000 : 30000,
   connectionTimeoutMillis: 5000,
-  ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+  ssl: needsSsl
+    ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED }
+    : undefined,
 });
 
 pool.on('error', (err) => {
@@ -46,6 +48,17 @@ export async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Pr
     throw e;
   } finally {
     client.release();
+  }
+}
+
+/** Check database connectivity. Used by health check endpoint. */
+export async function checkHealth(): Promise<{ ok: boolean; latencyMs: number }> {
+  const start = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    return { ok: true, latencyMs: Date.now() - start };
+  } catch {
+    return { ok: false, latencyMs: Date.now() - start };
   }
 }
 

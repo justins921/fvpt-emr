@@ -16,10 +16,23 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: [],
     },
   },
-  hsts: { maxAge: 31536000, includeSubDomains: true },
+  hsts: { maxAge: 63072000, includeSubDomains: true, preload: true }, // 2 years, preload-ready
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 });
+
+/** Additional Permissions-Policy header for hardened browser security. */
+export function permissionsPolicy(_req: Request, res: Response, next: NextFunction): void {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()'
+  );
+  next();
+}
 
 const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map(s => s.trim());
 

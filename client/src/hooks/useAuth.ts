@@ -9,55 +9,99 @@ interface User {
   lastName: string;
   role: string;
   npi?: string;
+  mfaEnabled?: boolean;
 }
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  mfaPending: boolean;
+  mfaToken: string | null;
   login: (username: string, password: string) => Promise<void>;
+  completeMfa: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
 
-export const useAuth = create<AuthState>((set) => ({
+export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  mfaPending: false,
+  mfaToken: null,
 
   login: async (username: string, password: string) => {
-    const response = await api.post<{ success: boolean; data: { accessToken: string; refreshToken: string; user: User } }>('/auth/login', { username, password });
+    const response = await api.post<{
+      success: boolean;
+      data: {
+        accessToken?: string;
+        mfaRequired?: boolean;
+        mfaToken?: string;
+        user: User;
+      };
+    }>('/auth/login', { username, password });
+
     if (response.success && response.data) {
-      api.setTokens(response.data.accessToken, response.data.refreshToken);
-      set({ user: response.data.user, isAuthenticated: true });
+      if (response.data.mfaRequired) {
+        // MFA step required — store token and wait for code
+        set({
+          mfaPending: true,
+          mfaToken: response.data.mfaToken || null,
+          user: response.data.user,
+        });
+        return;
+      }
+      // No MFA — login complete. Refresh token is set as HTTP-only cookie by server.
+      if (response.data.accessToken) {
+        api.setAccessToken(response.data.accessToken);
+      }
+      set({ user: response.data.user, isAuthenticated: true, mfaPending: false, mfaToken: null });
     } else {
-      throw new Error(response.success === false ? 'Login failed' : 'Unexpected response');
+      throw new Error('Login failed');
+    }
+  },
+
+  completeMfa: async (code: string) => {
+    const { mfaToken } = get();
+    if (!mfaToken) throw new Error('No MFA session');
+
+    const response = await api.post<{
+      success: boolean;
+      data: { accessToken: string; user: User };
+    }>('/auth/mfa/verify-login', { mfaToken, code });
+
+    if (response.success && response.data) {
+      api.setAccessToken(response.data.accessToken);
+      set({
+        user: response.data.user,
+        isAuthenticated: true,
+        mfaPending: false,
+        mfaToken: null,
+      });
+    } else {
+      throw new Error('Invalid MFA code');
     }
   },
 
   logout: async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
     api.clearTokens();
-    set({ user: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false, mfaPending: false, mfaToken: null });
   },
 
   checkAuth: async () => {
     try {
-      const rt = api.getStoredRefreshToken();
-      if (!rt) {
-        set({ isLoading: false });
-        return;
-      }
-      // Try to refresh the token
+      // Try to refresh — the HTTP-only cookie is sent automatically
       const refreshRes = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: rt }),
+        credentials: 'include',
       });
       if (refreshRes.ok) {
         const data = await refreshRes.json();
-        if (data.success && data.data) {
-          api.setTokens(data.data.accessToken, data.data.refreshToken);
+        if (data.success && data.data?.accessToken) {
+          api.setAccessToken(data.data.accessToken);
           // Fetch user profile
           const meRes = await api.get<{ success: boolean; data: User }>('/auth/me');
           if (meRes.success && meRes.data) {
