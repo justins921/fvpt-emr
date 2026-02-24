@@ -6,8 +6,12 @@
   * { -webkit-tap-highlight-color: transparent; }
   html { -webkit-text-size-adjust: 100%; }
   body { @apply min-h-screen; }
-  /* iPad-first touch targets */
-  button, a, input, select, textarea { @apply min-h-touch; }
+  /* iPad-first touch targets — scoped to the app shell, not the public landing page */
+  .app-shell button,
+  .app-shell a,
+  .app-shell input,
+  .app-shell select,
+  .app-shell textarea { @apply min-h-touch; }
   input, select, textarea { @apply text-base; /* prevent iOS zoom */ }
 }
 

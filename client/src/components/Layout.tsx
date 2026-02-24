@@ -93,7 +93,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="min-h-screen flex">
+    <div className="app-shell min-h-screen flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
