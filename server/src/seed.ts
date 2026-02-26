@@ -216,9 +216,50 @@ async function seed() {
     }
     console.log('SMS templates created');
 
+    // ══════════════════════════════════════════════════════════════
+    //  Fox Valley Physical Therapy — Production Clinic
+    // ══════════════════════════════════════════════════════════════
+    const fvptResult = await client.query(`
+      INSERT INTO clinics (name, npi, tax_id, address_line1, city, state, zip, phone, fax)
+      VALUES (
+        'Fox Valley Physical Therapy',
+        '1639574820',
+        '83-2941567',
+        '1750 N Randall Rd',
+        'Elgin',
+        'IL',
+        '60123',
+        '847-608-5100',
+        '847-608-5101'
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    `);
+
+    let fvptClinicId: string;
+    if (fvptResult.rows.length > 0) {
+      fvptClinicId = fvptResult.rows[0].id;
+    } else {
+      const existing = await client.query("SELECT id FROM clinics WHERE npi = '1639574820'");
+      fvptClinicId = existing.rows[0].id;
+    }
+    console.log('FVPT Clinic ID:', fvptClinicId);
+
+    const fvptHash = await hashPassword('FoxValley2024!');
+
+    // Paula — clinic owner
+    await client.query(`
+      INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
+      VALUES ($1, 'paula', $2, 'Paula', 'Sobojinski', 'owner', 'DPT', '1639574820')
+      ON CONFLICT (clinic_id, username) DO UPDATE SET password_hash = $2, role = 'owner'
+      RETURNING id
+    `, [fvptClinicId, fvptHash]);
+    console.log('User: paula (owner, DPT) — Fox Valley Physical Therapy');
+
     console.log('\n=== Seed Complete ===');
-    console.log('Demo Login: admin / password123!');
-    console.log('All users share the same password: password123!');
+    console.log('Demo Login:  admin / password123!');
+    console.log('FVPT Login:  paula / FoxValley2024!');
+    console.log('All demo users share the same password: password123!');
   } catch (err) {
     console.error('Seed failed:', err);
     throw err;

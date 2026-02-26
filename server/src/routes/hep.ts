@@ -712,7 +712,7 @@ router.get('/', requirePermission(Permission.HEP_VIEW), async (req: Request, res
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * limitNum;
 
-    let whereClause = 'clinic_id = $1 AND is_active = true';
+    let whereClause = '(clinic_id = $1 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true';
     const params: unknown[] = [req.auth!.clinicId];
 
     if (search) {

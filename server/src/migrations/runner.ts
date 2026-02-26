@@ -22,6 +22,7 @@ async function run() {
       { name: '005_add_messaging', module: await import('./005_add_messaging') },
       { name: '006_add_all_features', module: await import('./006_add_all_features') },
       { name: '007_security_hardening', module: await import('./007_security_hardening') },
+      { name: '008_seed_exercises_and_features', module: await import('./008_seed_exercises_and_features') },
     ];
 
     if (direction === 'up') {
