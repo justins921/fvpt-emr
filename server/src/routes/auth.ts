@@ -80,7 +80,10 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
       return;
     }
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error ? err.stack : undefined;
+    console.error('[LOGIN ERROR]', errMsg, errStack);
+    res.status(500).json({ success: false, error: 'Internal server error', debug: errMsg });
   }
 });
 
