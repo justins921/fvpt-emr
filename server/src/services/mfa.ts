@@ -1,9 +1,22 @@
-import { generateSecret, generateURI, verifySync } from 'otplib';
+// otplib depends on @scure/base which is ESM-only.
+// TypeScript CJS compilation converts import() to require(), breaking it.
+// Use Function constructor to preserve real ESM import() at runtime.
 import QRCode from 'qrcode';
 import { query } from '../db';
 import { encryptField, decryptField } from './encryption';
 
 const APP_NAME = 'EMR OS';
+
+// This preserves the real ESM import() even after TypeScript compiles to CJS
+const importEsm = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
+
+let otplibCache: any = null;
+async function getOtplib() {
+  if (!otplibCache) {
+    otplibCache = await importEsm('otplib');
+  }
+  return otplibCache;
+}
 
 /** Generate a new MFA secret for a user (not yet enabled). */
 export async function generateMfaSetup(userId: string, clinicId: string): Promise<{
@@ -11,9 +24,9 @@ export async function generateMfaSetup(userId: string, clinicId: string): Promis
   qrCodeDataUrl: string;
   otpauthUrl: string;
 }> {
+  const { generateSecret, generateURI } = await getOtplib();
   const secret = generateSecret();
 
-  // Get the user's username for the TOTP label
   const result = await query(
     'SELECT username FROM users WHERE id = $1 AND clinic_id = $2',
     [userId, clinicId]
@@ -24,7 +37,6 @@ export async function generateMfaSetup(userId: string, clinicId: string): Promis
   const otpauthUrl = generateURI({ secret, issuer: APP_NAME, label: username });
   const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
 
-  // Store the secret encrypted (but don't enable MFA yet until verified)
   const encryptedSecret = encryptField(secret);
   await query(
     'UPDATE users SET mfa_secret = $1 WHERE id = $2 AND clinic_id = $3',
@@ -44,9 +56,10 @@ export async function verifyAndEnableMfa(userId: string, clinicId: string, token
 
   const { mfa_secret, mfa_enabled } = result.rows[0];
   if (!mfa_secret) return false;
-  if (mfa_enabled) return false; // Already enabled — use verifyMfaToken instead
+  if (mfa_enabled) return false;
 
   const secret = decryptField(mfa_secret);
+  const { verifySync } = await getOtplib();
   const check = verifySync({ token, secret });
 
   if (check.valid) {
@@ -72,6 +85,7 @@ export async function verifyMfaToken(userId: string, token: string): Promise<boo
   if (!mfa_enabled || !mfa_secret) return false;
 
   const secret = decryptField(mfa_secret);
+  const { verifySync } = await getOtplib();
   const check = verifySync({ token, secret });
   return check.valid;
 }
