@@ -1,26 +1,32 @@
 // Vercel serverless function entry point
-// Wraps the Express app for Vercel's Node.js runtime
-import type { Request, Response } from 'express';
+// Uses dynamic import with error catching so startup crashes return useful JSON
+import type { IncomingMessage, ServerResponse } from 'http';
 
-let app: unknown;
-let startupError: Error | null = null;
+let appHandler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
+let startupError: string | null = null;
 
-try {
-  app = require('../server/src/app').default;
-} catch (e) {
-  startupError = e instanceof Error ? e : new Error(String(e));
-  console.error('[STARTUP CRASH]', startupError.message, startupError.stack);
-}
+const appReady = import('../server/src/app')
+  .then((mod) => {
+    appHandler = mod.default;
+  })
+  .catch((err) => {
+    startupError = err instanceof Error
+      ? `${err.message}\n${err.stack}`
+      : String(err);
+    console.error('[STARTUP CRASH]', startupError);
+  });
 
-export default function handler(req: Request, res: Response) {
-  if (startupError) {
-    res.status(500).json({
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  await appReady;
+
+  if (startupError || !appHandler) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
       success: false,
-      error: 'App failed to start',
-      debug: startupError.message,
-      stack: startupError.stack,
-    });
+      error: startupError || 'App handler not loaded',
+    }));
     return;
   }
-  return (app as (req: Request, res: Response) => void)(req, res);
+
+  return appHandler(req, res);
 }

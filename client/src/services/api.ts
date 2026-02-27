@@ -62,7 +62,11 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new ApiError(response.status, error.error || 'Request failed', error.details);
+      // Include server debug info in error message when available
+      const msg = error.debug
+        ? `${error.error || 'Request failed'} — ${error.debug}`
+        : error.error || 'Request failed';
+      throw new ApiError(response.status, msg, error.details);
     }
 
     if (response.headers.get('content-type')?.includes('application/json')) {
