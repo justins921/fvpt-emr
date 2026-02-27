@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { login, refreshAccessToken, logout, completeMfaLogin } from '../services/auth';
+import { login, refreshAccessToken, logout, completeMfaLogin, switchClinicContext } from '../services/auth';
 import { authenticate, validateSession, requireRole } from '../middleware/auth';
 import { loginLimiter } from '../middleware/security';
 import { generateMfaSetup, verifyAndEnableMfa, disableMfa } from '../services/mfa';
 import { config } from '../config';
 import { Role } from '../types';
+import { query } from '../db';
 
 const router = Router();
 
@@ -192,32 +193,85 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
 
 router.get('/me', authenticate, validateSession, async (req: Request, res: Response) => {
   try {
-    const { query: dbQuery } = await import('../db');
-    const result = await dbQuery(
-      `SELECT id, clinic_id, username, first_name, last_name, role, npi, license_number, is_active, mfa_enabled
-       FROM users WHERE id = $1 AND clinic_id = $2`,
-      [req.auth!.userId, req.auth!.clinicId]
-    );
+    // For dev users, look up user by ID only (they may be operating in a different clinic)
+    const isDev = req.auth!.role === Role.DEV;
+    const userQuery = isDev
+      ? `SELECT id, clinic_id, username, first_name, last_name, role, npi, license_number, is_active, mfa_enabled
+         FROM users WHERE id = $1`
+      : `SELECT id, clinic_id, username, first_name, last_name, role, npi, license_number, is_active, mfa_enabled
+         FROM users WHERE id = $1 AND clinic_id = $2`;
+    const userParams = isDev ? [req.auth!.userId] : [req.auth!.userId, req.auth!.clinicId];
+    const result = await query(userQuery, userParams);
+
     if (result.rows.length === 0) {
       res.status(404).json({ success: false, error: 'User not found' });
       return;
     }
     const user = result.rows[0];
+
+    // For dev users, include the active clinic info and clinic list
+    const responseData: Record<string, unknown> = {
+      id: user.id,
+      clinicId: req.auth!.clinicId, // The active clinic context from JWT
+      homeClinicId: user.clinic_id,
+      username: user.username,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role,
+      npi: user.npi,
+      licenseNumber: user.license_number,
+      mfaEnabled: user.mfa_enabled,
+    };
+
+    if (isDev) {
+      // Fetch all clinics for the clinic switcher
+      const clinicsResult = await query(
+        `SELECT id, name, npi, city, state FROM clinics ORDER BY name`
+      );
+      responseData.clinics = clinicsResult.rows;
+
+      // Fetch active clinic name
+      const activeClinic = clinicsResult.rows.find((c: any) => c.id === req.auth!.clinicId);
+      responseData.clinicName = activeClinic?.name || 'Unknown';
+    }
+
+    res.json({ success: true, data: responseData });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Dev-only: Switch clinic context ──
+router.post('/switch-clinic', authenticate, validateSession, async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({ clinicId: z.string().uuid() });
+    const { clinicId: targetClinicId } = schema.parse(req.body);
+
+    const result = await switchClinicContext(
+      req.auth!.userId,
+      targetClinicId,
+      req.auth!.role as Role,
+      req
+    );
+
+    if (!result) {
+      res.status(403).json({ success: false, error: 'Clinic switch not allowed' });
+      return;
+    }
+
+    setRefreshCookie(res, result.refreshToken);
     res.json({
       success: true,
       data: {
-        id: user.id,
-        clinicId: user.clinic_id,
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        role: user.role,
-        npi: user.npi,
-        licenseNumber: user.license_number,
-        mfaEnabled: user.mfa_enabled,
+        accessToken: result.accessToken,
+        user: result.user,
       },
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

@@ -54,7 +54,7 @@ const SECTIONS = [
 ];
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchClinic, isSwitchingClinic } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -109,6 +109,24 @@ export default function Layout() {
           </div>
         </div>
 
+        {/* Dev clinic switcher */}
+        {user?.role === 'dev' && user.clinics && user.clinics.length > 0 && (
+          <div className="px-3 py-2 border-b border-primary-800">
+            <label className="text-[10px] uppercase tracking-wider text-primary-400 font-semibold">Active Clinic</label>
+            <select
+              value={user.clinicId}
+              onChange={e => switchClinic(e.target.value)}
+              disabled={isSwitchingClinic}
+              className="mt-1 w-full bg-primary-800 text-white text-xs rounded px-2 py-1.5 border border-primary-700 focus:outline-none focus:border-primary-500 disabled:opacity-50"
+            >
+              {user.clinics.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {isSwitchingClinic && <div className="text-[10px] text-primary-400 mt-1">Switching...</div>}
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto mt-2 px-2 pb-4">
           {/* Primary nav - always visible */}
           <div className="space-y-0.5">
@@ -143,7 +161,7 @@ export default function Layout() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</div>
-              <div className="text-xs text-primary-300 capitalize">{user?.role?.replace('_', ' ')}</div>
+              <div className="text-xs text-primary-300 capitalize">{user?.role?.replace('_', ' ')}{user?.clinicName ? ` \u00b7 ${user.clinicName}` : ''}</div>
             </div>
           </div>
           <button onClick={logout} className="w-full text-left text-sm text-primary-300 hover:text-white py-1">

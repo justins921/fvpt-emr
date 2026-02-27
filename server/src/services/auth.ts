@@ -352,3 +352,50 @@ export async function revokeAllSessions(userId: string, clinicId: string): Promi
     [userId, clinicId]
   );
 }
+
+/**
+ * Switch a dev user's clinic context. Creates a new session scoped to the
+ * target clinic, returns fresh access + refresh tokens.
+ */
+export async function switchClinicContext(
+  userId: string,
+  targetClinicId: string,
+  role: Role,
+  req: Request
+): Promise<{ accessToken: string; refreshToken: string; user: Record<string, unknown> } | null> {
+  // Only dev users can switch clinics
+  if (role !== Role.DEV) return null;
+
+  // Fetch user info from their home clinic
+  const userResult = await query(
+    `SELECT id, clinic_id, username, first_name, last_name, role, npi, is_active
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (userResult.rows.length === 0) return null;
+  const user = userResult.rows[0];
+  if (!user.is_active) return null;
+
+  // Verify target clinic exists
+  const clinicResult = await query(
+    `SELECT id, name FROM clinics WHERE id = $1`,
+    [targetClinicId]
+  );
+  if (clinicResult.rows.length === 0) return null;
+
+  // Create a session scoped to the target clinic
+  // Override the user's clinic_id for session creation
+  const sessionUser = { ...user, clinic_id: targetClinicId };
+  const { accessToken, refreshToken } = await createSession(sessionUser, req);
+
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      ...buildUserResponse(user),
+      clinicId: targetClinicId,
+      homeClinicId: user.clinic_id,
+      clinicName: clinicResult.rows[0].name,
+    },
+  };
+}
