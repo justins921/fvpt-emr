@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd client && npx vite build",
+  "buildCommand": "cd server && npx tsc && cd ../client && npx vite build",
   "outputDirectory": "client/dist",
   "installCommand": "npm install --include=dev",
   "framework": null,
@@ -12,7 +12,7 @@
     "api/index.ts": {
       "maxDuration": 30,
       "memory": 1024,
-      "includeFiles": "server/**"
+      "includeFiles": "server/dist/**"
     }
   },
   "env": {
