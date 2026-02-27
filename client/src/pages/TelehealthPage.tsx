@@ -8,11 +8,11 @@ interface TelehealthSession {
   therapist_id: string;
   appointment_id: string | null;
   status: string;
-  scheduled_time: string;
+  created_at: string;
   started_at: string | null;
   ended_at: string | null;
-  patient_link: string | null;
-  provider_link: string | null;
+  patient_url: string | null;
+  room_url: string | null;
   patient_first_name: string;
   patient_last_name: string;
   therapist_first_name: string;
@@ -89,7 +89,7 @@ export default function TelehealthPage() {
     setError('');
     try {
       const qs = statusFilter ? `?status=${statusFilter}` : '';
-      const res = await api.get<any>(`/telehealth/sessions${qs}`);
+      const res = await api.get<any>(`/telehealth${qs}`);
       setSessions(res.data || []);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load sessions');
@@ -117,15 +117,15 @@ export default function TelehealthPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!formPatientId || !formTherapistId || !formScheduledTime) return;
+    if (!formPatientId || !formTherapistId) return;
     setCreating(true);
     setError('');
     try {
-      await api.post('/telehealth/sessions', {
+      await api.post('/telehealth', {
         patientId: formPatientId,
         therapistId: formTherapistId,
         appointmentId: formAppointmentId || undefined,
-        scheduledTime: formScheduledTime,
+        scheduledAt: formScheduledTime ? new Date(formScheduledTime).toISOString() : undefined,
       });
       setSuccess('Telehealth session created');
       setShowForm(false);
@@ -149,7 +149,7 @@ export default function TelehealthPage() {
   async function startSession(id: string) {
     setError('');
     try {
-      await api.post(`/telehealth/sessions/${id}/start`);
+      await api.put(`/telehealth/${id}/start`);
       setSuccess('Session started');
       loadSessions();
       setTimeout(() => setSuccess(''), 4000);
@@ -161,7 +161,7 @@ export default function TelehealthPage() {
   async function endSession(id: string) {
     setError('');
     try {
-      await api.post(`/telehealth/sessions/${id}/end`);
+      await api.put(`/telehealth/${id}/end`);
       setSuccess('Session ended');
       loadSessions();
       setTimeout(() => setSuccess(''), 4000);
@@ -249,12 +249,11 @@ export default function TelehealthPage() {
               </select>
             </div>
             <div>
-              <label className="label">Scheduled Time *</label>
+              <label className="label">Scheduled Time (optional)</label>
               <input
                 type="datetime-local"
                 value={formScheduledTime}
                 onChange={e => setFormScheduledTime(e.target.value)}
-                required
                 className="input"
               />
             </div>
@@ -316,7 +315,7 @@ export default function TelehealthPage() {
               <tr>
                 <th className="text-left px-4 py-3">Patient</th>
                 <th className="text-left px-4 py-3">Therapist</th>
-                <th className="text-left px-4 py-3">Scheduled</th>
+                <th className="text-left px-4 py-3">Created</th>
                 <th className="text-left px-4 py-3">Status</th>
                 <th className="text-left px-4 py-3">Duration</th>
                 <th className="text-left px-4 py-3">Actions</th>
@@ -339,7 +338,7 @@ export default function TelehealthPage() {
                       {s.therapist_last_name}, {s.therapist_first_name}
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      {formatDateTime(s.scheduled_time)}
+                      {formatDateTime(s.created_at)}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2 py-0.5 text-xs rounded-full font-medium ${STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-600'}`}>
@@ -367,17 +366,17 @@ export default function TelehealthPage() {
                             End
                           </button>
                         )}
-                        {s.patient_link && s.status !== 'completed' && (
+                        {s.patient_url && s.status !== 'completed' && (
                           <button
-                            onClick={() => copyPatientLink(s.patient_link)}
+                            onClick={() => copyPatientLink(s.patient_url)}
                             className="text-xs text-primary-600 underline"
                           >
                             Copy Patient Link
                           </button>
                         )}
-                        {s.provider_link && s.status === 'in_progress' && (
+                        {s.room_url && s.status === 'in_progress' && (
                           <a
-                            href={s.provider_link}
+                            href={s.room_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-600 underline"

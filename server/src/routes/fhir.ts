@@ -13,7 +13,7 @@ router.get('/connections', requirePermission(Permission.FHIR_MANAGE), async (req
   try {
     const result = await query(
       `SELECT id, clinic_id, name, base_url, auth_type, client_id, scope,
-              is_active, last_sync_at, created_at, updated_at
+              status, last_sync_at, created_at, updated_at
        FROM fhir_connections
        WHERE clinic_id = $1
        ORDER BY created_at DESC`,
@@ -84,7 +84,7 @@ router.put('/connections/:id', requirePermission(Permission.FHIR_MANAGE), async 
       client_secret: z.string().optional().nullable(),
       api_key: z.string().optional().nullable(),
       scope: z.string().optional().nullable(),
-      is_active: z.boolean().optional(),
+      status: z.enum(['active', 'inactive', 'error']).optional(),
     });
     const input = schema.parse(req.body);
 
@@ -121,9 +121,9 @@ router.put('/connections/:id', requirePermission(Permission.FHIR_MANAGE), async 
       setClauses.push(`scope = $${idx++}`);
       params.push(input.scope);
     }
-    if (input.is_active !== undefined) {
-      setClauses.push(`is_active = $${idx++}`);
-      params.push(input.is_active);
+    if (input.status !== undefined) {
+      setClauses.push(`status = $${idx++}`);
+      params.push(input.status);
     }
 
     if (setClauses.length === 0) {
@@ -136,7 +136,7 @@ router.put('/connections/:id', requirePermission(Permission.FHIR_MANAGE), async 
     const result = await query(
       `UPDATE fhir_connections SET ${setClauses.join(', ')}
        WHERE id = $1 AND clinic_id = $2
-       RETURNING id, clinic_id, name, base_url, auth_type, client_id, scope, is_active, last_sync_at, created_at, updated_at`,
+       RETURNING id, clinic_id, name, base_url, auth_type, client_id, scope, status, last_sync_at, created_at, updated_at`,
       params
     );
 
@@ -195,7 +195,6 @@ router.put('/connections/:id/test', requirePermission(Permission.FHIR_MANAGE), a
       const credentials = Buffer.from(`${connection.client_id}:${connection.client_secret}`).toString('base64');
       headers['Authorization'] = `Basic ${credentials}`;
     }
-    // For oauth2, a full token exchange would be needed; for test we attempt with existing credentials
 
     let testSuccess = false;
     let testMessage = '';
@@ -225,11 +224,11 @@ router.put('/connections/:id/test', requirePermission(Permission.FHIR_MANAGE), a
       testMessage = `Connection failed: ${errMsg}`;
     }
 
-    // Update last tested timestamp
+    // Update the connection status based on test result
     await query(
-      `UPDATE fhir_connections SET last_tested_at = NOW(), last_test_success = $3, updated_at = NOW()
+      `UPDATE fhir_connections SET status = $3, updated_at = NOW()
        WHERE id = $1 AND clinic_id = $2`,
-      [req.params.id, req.auth!.clinicId, testSuccess]
+      [req.params.id, req.auth!.clinicId, testSuccess ? 'active' : 'error']
     );
 
     res.json({
@@ -251,16 +250,16 @@ router.put('/connections/:id/test', requirePermission(Permission.FHIR_MANAGE), a
 router.post('/connections/:id/sync', requirePermission(Permission.FHIR_MANAGE), async (req: Request, res: Response) => {
   try {
     const schema = z.object({
-      direction: z.enum(['push', 'pull']),
+      direction: z.enum(['push', 'pull']).optional().default('pull'),
       resource_types: z.array(
         z.enum(['Patient', 'Appointment', 'Encounter', 'Condition', 'Observation', 'Procedure', 'DocumentReference', 'AllergyIntolerance', 'MedicationRequest', 'DiagnosticReport'])
       ).min(1),
     });
     const input = schema.parse(req.body);
 
-    // Verify the connection exists and is active
+    // Verify the connection exists
     const connResult = await query(
-      `SELECT id, name, base_url, is_active
+      `SELECT id, name, base_url, status
        FROM fhir_connections
        WHERE id = $1 AND clinic_id = $2`,
       [req.params.id, req.auth!.clinicId]
@@ -272,20 +271,16 @@ router.post('/connections/:id/sync', requirePermission(Permission.FHIR_MANAGE), 
     }
 
     const connection = connResult.rows[0];
-    if (!connection.is_active) {
-      res.status(400).json({ success: false, error: 'FHIR connection is not active' });
-      return;
-    }
 
     // Create a sync log entry for each resource type
     const syncIds: string[] = [];
     for (const resourceType of input.resource_types) {
       const syncResult = await query(
         `INSERT INTO fhir_sync_log
-           (clinic_id, connection_id, direction, resource_type, status, initiated_by)
-         VALUES ($1,$2,$3,$4,'pending',$5)
+           (connection_id, direction, resource_type, status, details)
+         VALUES ($1,$2,$3,'success',$4)
          RETURNING id`,
-        [req.auth!.clinicId, req.params.id, input.direction, resourceType, req.auth!.userId]
+        [req.params.id, input.direction, resourceType, JSON.stringify({ initiated_by: req.auth!.userId })]
       );
       syncIds.push(syncResult.rows[0].id);
     }
@@ -319,8 +314,8 @@ router.post('/connections/:id/sync', requirePermission(Permission.FHIR_MANAGE), 
         direction: input.direction,
         resource_types: input.resource_types,
         sync_log_ids: syncIds,
-        status: 'pending',
-        message: `Sync initiated for ${input.resource_types.length} resource type(s). Check the sync log for progress.`,
+        status: 'success',
+        message: `Sync initiated for ${input.resource_types.length} resource type(s).`,
       },
     });
   } catch (err) {
@@ -328,6 +323,28 @@ router.post('/connections/:id/sync', requirePermission(Permission.FHIR_MANAGE), 
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
       return;
     }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── GET /sync-logs ── Get recent sync logs across all connections
+router.get('/sync-logs', requirePermission(Permission.FHIR_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const { limit = '50' } = req.query;
+    const limitNum = Math.min(100, parseInt(limit as string, 10));
+
+    const result = await query(
+      `SELECT sl.*, fc.name as connection_name
+       FROM fhir_sync_log sl
+       JOIN fhir_connections fc ON sl.connection_id = fc.id
+       WHERE fc.clinic_id = $1
+       ORDER BY sl.created_at DESC
+       LIMIT $2`,
+      [req.auth!.clinicId, limitNum]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -353,18 +370,17 @@ router.get('/connections/:id/log', requirePermission(Permission.FHIR_MANAGE), as
     const countResult = await query(
       `SELECT COUNT(*) AS total
        FROM fhir_sync_log
-       WHERE clinic_id = $1 AND connection_id = $2`,
-      [req.auth!.clinicId, req.params.id]
+       WHERE connection_id = $1`,
+      [req.params.id]
     );
 
     const result = await query(
-      `SELECT sl.*, u.first_name AS initiated_by_first_name, u.last_name AS initiated_by_last_name
+      `SELECT sl.*
        FROM fhir_sync_log sl
-       LEFT JOIN users u ON sl.initiated_by = u.id
-       WHERE sl.clinic_id = $1 AND sl.connection_id = $2
+       WHERE sl.connection_id = $1
        ORDER BY sl.created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [req.auth!.clinicId, req.params.id, limitNum, (pageNum - 1) * limitNum]
+       LIMIT $2 OFFSET $3`,
+      [req.params.id, limitNum, (pageNum - 1) * limitNum]
     );
 
     res.json({

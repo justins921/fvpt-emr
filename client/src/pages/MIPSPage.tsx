@@ -16,10 +16,16 @@ export default function MIPSPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
-  const [providerId, setProviderId] = useState(user?.id || '');
+  const [providerId, setProviderId] = useState('');
   const [providers, setProviders] = useState<any[]>([]);
   const [showRecord, setShowRecord] = useState(false);
-  const [recordForm, setRecordForm] = useState({ measure_id: '', patient_id: '', value: '', met: true });
+  const [recordForm, setRecordForm] = useState({
+    measure_id: '',
+    patient_id: '',
+    numerator: true,
+    denominator: true,
+    exclusion: false,
+  });
   const [patients, setPatients] = useState<any[]>([]);
 
   useEffect(() => { loadProviders(); loadPatients(); }, []);
@@ -27,8 +33,10 @@ export default function MIPSPage() {
 
   async function loadProviders() {
     try {
-      const res = await api.get<any>('/users?role=therapist');
-      setProviders(res.data || []);
+      const res = await api.get<any>('/users');
+      setProviders((res.data || []).filter((u: any) =>
+        ['therapist', 'owner', 'admin'].includes(u.role) && u.is_active
+      ));
     } catch {}
   }
 
@@ -50,24 +58,32 @@ export default function MIPSPage() {
   async function loadSummary() {
     try {
       const res = await api.get<any>(`/mips/summary?year=${year}${providerId ? `&provider_id=${providerId}` : ''}`);
-      setSummary(res.data || []);
+      // Backend returns { year, provider_id, measures: [...] }
+      const data = res.data;
+      setSummary(data?.measures || []);
     } catch {}
   }
 
   async function handleRecord(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSuccess('');
+    const measure = definitions.find((d: any) => d.measure_id === recordForm.measure_id);
+    if (!measure) { setError('Select a measure'); return; }
     try {
-      await api.post('/mips/record', {
+      await api.post('/mips', {
         measure_id: recordForm.measure_id,
+        measure_title: measure.title,
         patient_id: recordForm.patient_id,
         provider_id: providerId || user?.id,
-        reporting_year: year,
-        value: recordForm.value ? Number(recordForm.value) : undefined,
-        met: recordForm.met,
+        numerator: recordForm.numerator,
+        denominator: recordForm.denominator,
+        exclusion: recordForm.exclusion,
+        reporting_period_start: `${year}-01-01`,
+        reporting_period_end: `${year}-12-31`,
       });
       setSuccess('Measure recorded');
       setShowRecord(false);
+      setRecordForm({ measure_id: '', patient_id: '', numerator: true, denominator: true, exclusion: false });
       loadSummary();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to record measure');
@@ -78,7 +94,7 @@ export default function MIPSPage() {
     if (!confirm(`Submit MIPS data for ${year}? This cannot be undone.`)) return;
     setError(''); setSuccess('');
     try {
-      await api.post('/mips/submit', { year, provider_id: providerId || undefined });
+      await api.post('/mips/submit', { year, provider_id: providerId || user?.id });
       setSuccess(`MIPS data submitted for ${year}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Submission failed');
@@ -87,8 +103,14 @@ export default function MIPSPage() {
 
   function getRateForMeasure(measureId: string) {
     const s = summary.find((m: any) => m.measure_id === measureId);
-    if (!s || !s.total || s.total === 0) return null;
-    return { met: s.met, total: s.total, rate: ((s.met / s.total) * 100).toFixed(1) };
+    if (!s) return null;
+    const denominator = parseInt(s.denominator_count, 10) || 0;
+    const numerator = parseInt(s.numerator_count, 10) || 0;
+    const exclusions = parseInt(s.exclusion_count, 10) || 0;
+    const eligible = denominator - exclusions;
+    if (eligible <= 0) return null;
+    const rate = ((numerator / eligible) * 100).toFixed(1);
+    return { met: numerator, total: eligible, rate };
   }
 
   return (
@@ -133,7 +155,7 @@ export default function MIPSPage() {
             <select value={recordForm.measure_id} onChange={e => setRecordForm(f => ({ ...f, measure_id: e.target.value }))} required className="input">
               <option value="">Select measure...</option>
               {definitions.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.measure_number} - {d.title}</option>
+                <option key={d.measure_id} value={d.measure_id}>{d.measure_id} - {d.title}</option>
               ))}
             </select>
           </div>
@@ -146,14 +168,18 @@ export default function MIPSPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="label">Value (optional)</label>
-            <input type="number" step="any" value={recordForm.value} onChange={e => setRecordForm(f => ({ ...f, value: e.target.value }))} className="input" />
-          </div>
-          <div className="flex items-end gap-2 pb-1">
+          <div className="sm:col-span-2 flex gap-4 items-center">
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={recordForm.met} onChange={e => setRecordForm(f => ({ ...f, met: e.target.checked }))} className="rounded" />
-              Measure Met
+              <input type="checkbox" checked={recordForm.denominator} onChange={e => setRecordForm(f => ({ ...f, denominator: e.target.checked }))} className="rounded" />
+              In Denominator
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={recordForm.numerator} onChange={e => setRecordForm(f => ({ ...f, numerator: e.target.checked }))} className="rounded" />
+              Numerator Met
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={recordForm.exclusion} onChange={e => setRecordForm(f => ({ ...f, exclusion: e.target.checked }))} className="rounded" />
+              Exclusion
             </label>
           </div>
           <div className="sm:col-span-2 flex gap-2 justify-end">
@@ -173,19 +199,21 @@ export default function MIPSPage() {
                 <th className="text-left px-4 py-3">Measure #</th>
                 <th className="text-left px-4 py-3">Title</th>
                 <th className="text-left px-4 py-3">Category</th>
+                <th className="text-center px-4 py-3">Priority</th>
                 <th className="text-right px-4 py-3">Met</th>
-                <th className="text-right px-4 py-3">Total</th>
+                <th className="text-right px-4 py-3">Eligible</th>
                 <th className="text-left px-4 py-3">Performance Rate</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {definitions.map((d: any) => {
-                const rate = getRateForMeasure(d.id);
+                const rate = getRateForMeasure(d.measure_id);
                 return (
-                  <tr key={d.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono">{d.measure_number}</td>
+                  <tr key={d.measure_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono">{d.measure_id}</td>
                     <td className="px-4 py-3">{d.title}</td>
                     <td className="px-4 py-3 text-slate-500">{d.category || '-'}</td>
+                    <td className="px-4 py-3 text-center">{d.high_priority ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">High</span> : '-'}</td>
                     <td className="px-4 py-3 text-right font-mono">{rate?.met ?? '-'}</td>
                     <td className="px-4 py-3 text-right font-mono">{rate?.total ?? '-'}</td>
                     <td className="px-4 py-3 w-48">

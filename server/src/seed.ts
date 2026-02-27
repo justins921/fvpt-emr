@@ -256,9 +256,20 @@ async function seed() {
     `, [fvptClinicId, fvptHash]);
     console.log('User: paula (owner, DPT) — Fox Valley Physical Therapy');
 
+    // Justin — dev support account (can support all clinics that use the system)
+    const devHash = await hashPassword('SobDev2024!');
+    await client.query(`
+      INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
+      VALUES ($1, 'jsob', $2, 'Justin', 'Sobojinski', 'dev', NULL, NULL)
+      ON CONFLICT (clinic_id, username) DO UPDATE SET password_hash = $2, role = 'dev'
+      RETURNING id
+    `, [fvptClinicId, devHash]);
+    console.log('User: jsob (dev) — Fox Valley Physical Therapy');
+
     console.log('\n=== Seed Complete ===');
     console.log('Demo Login:  admin / password123!');
     console.log('FVPT Login:  paula / FoxValley2024!');
+    console.log('FVPT Dev:    jsob  / SobDev2024!');
     console.log('All demo users share the same password: password123!');
   } catch (err) {
     console.error('Seed failed:', err);

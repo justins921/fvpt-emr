@@ -12,16 +12,16 @@ router.use(authenticate, validateSession, tenantScope);
 
 const BODY_REGIONS = [
   'cervical', 'thoracic', 'lumbar', 'shoulder', 'elbow', 'wrist_hand',
-  'hip', 'knee', 'ankle_foot', 'core', 'upper_extremity', 'lower_extremity',
-  'balance', 'full_body',
+  'elbow_wrist', 'hip', 'knee', 'ankle_foot', 'core', 'upper_extremity',
+  'lower_extremity', 'balance', 'full_body',
 ] as const;
 
 const CATEGORIES = [
   'strengthening', 'stretching', 'rom', 'balance', 'functional',
-  'cardio', 'manual_therapy', 'modality',
+  'cardio', 'manual_therapy', 'modality', 'neuromuscular',
 ] as const;
 
-const DIFFICULTIES = ['easy', 'moderate', 'hard'] as const;
+const DIFFICULTIES = ['easy', 'beginner', 'moderate', 'hard', 'advanced'] as const;
 
 // ── Zod Schemas ──
 
@@ -740,7 +740,7 @@ router.get('/', requirePermission(Permission.HEP_VIEW), async (req: Request, res
     );
 
     const result = await query(
-      `SELECT id, name, description, body_region, category, difficulty,
+      `SELECT id, name, description, body_region, category, difficulty, instructions,
               default_sets, default_reps, default_hold_seconds, default_duration_minutes,
               video_url, image_url, tags, created_at
        FROM exercises

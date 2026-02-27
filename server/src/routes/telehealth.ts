@@ -20,9 +20,9 @@ router.get('/room/:roomId', async (req: Request, res: Response) => {
         ts.room_url,
         ts.patient_url,
         ts.status,
-        ts.scheduled_at,
         ts.started_at,
         ts.ended_at,
+        ts.created_at,
         p.first_name as patient_first_name,
         p.last_name as patient_last_name,
         u.first_name as therapist_first_name,
@@ -51,9 +51,9 @@ router.get('/room/:roomId', async (req: Request, res: Response) => {
         room_url: session.room_url,
         patient_url: session.patient_url,
         status: session.status,
-        scheduled_at: session.scheduled_at,
         started_at: session.started_at,
         ended_at: session.ended_at,
+        created_at: session.created_at,
         patient_name: `${session.patient_first_name} ${session.patient_last_name}`,
         therapist_name: `${session.therapist_first_name} ${session.therapist_last_name}`,
         therapist_credential: session.therapist_credential,
@@ -72,7 +72,7 @@ const createSessionSchema = z.object({
   appointmentId: z.string().uuid().optional().nullable(),
   patientId: z.string().uuid(),
   therapistId: z.string().uuid(),
-  scheduledAt: z.string().datetime().optional().nullable(),
+  scheduledAt: z.string().optional().nullable(),
 });
 
 // Create telehealth session
@@ -119,9 +119,9 @@ router.post('/', requirePermission(Permission.TELEHEALTH_CREATE), async (req: Re
     const result = await query(
       `INSERT INTO telehealth_sessions (
         clinic_id, appointment_id, patient_id, therapist_id,
-        room_id, room_url, patient_url, status, scheduled_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8)
-      RETURNING id, room_id, room_url, patient_url, status`,
+        room_id, room_url, patient_url, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
+      RETURNING id, room_id, room_url, patient_url, status, created_at`,
       [
         req.auth!.clinicId,
         input.appointmentId || null,
@@ -130,7 +130,6 @@ router.post('/', requirePermission(Permission.TELEHEALTH_CREATE), async (req: Re
         roomId,
         roomUrl,
         patientUrl,
-        input.scheduledAt || null,
       ]
     );
 

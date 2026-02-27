@@ -72,7 +72,7 @@ export default function FHIRPage() {
   async function testConnection(id: string) {
     setTesting(id); setError(''); setSuccess('');
     try {
-      const res = await api.post<any>(`/fhir/connections/${id}/test`);
+      const res = await api.put<any>(`/fhir/connections/${id}/test`);
       setSuccess(res.data?.message || 'Connection successful');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Connection test failed');

@@ -5,13 +5,14 @@ import { useAuth } from '../hooks/useAuth';
 interface Exercise {
   id: string;
   name: string;
+  description: string;
   body_region: string;
   category: string;
   difficulty: string;
   instructions: string;
-  sets: number;
-  reps: number;
-  hold_seconds: number;
+  default_sets: number;
+  default_reps: number;
+  default_hold_seconds: number;
   is_active: boolean;
 }
 
@@ -39,9 +40,34 @@ interface ProgramExercise {
 
 type Tab = 'exercises' | 'programs';
 
-const BODY_REGIONS = ['Cervical', 'Shoulder', 'Elbow/Wrist', 'Thoracic', 'Lumbar', 'Hip', 'Knee', 'Ankle/Foot', 'Full Body'];
-const CATEGORIES = ['Strengthening', 'Stretching', 'Balance', 'ROM', 'Cardiovascular', 'Functional', 'Neuromuscular'];
-const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'];
+const BODY_REGIONS = [
+  { label: 'Cervical', value: 'cervical' },
+  { label: 'Shoulder', value: 'shoulder' },
+  { label: 'Elbow/Wrist', value: 'elbow_wrist' },
+  { label: 'Thoracic', value: 'thoracic' },
+  { label: 'Lumbar', value: 'lumbar' },
+  { label: 'Hip', value: 'hip' },
+  { label: 'Knee', value: 'knee' },
+  { label: 'Ankle/Foot', value: 'ankle_foot' },
+  { label: 'Full Body', value: 'full_body' },
+];
+const CATEGORIES = [
+  { label: 'Strengthening', value: 'strengthening' },
+  { label: 'Stretching', value: 'stretching' },
+  { label: 'Balance', value: 'balance' },
+  { label: 'ROM', value: 'rom' },
+  { label: 'Cardiovascular', value: 'cardio' },
+  { label: 'Functional', value: 'functional' },
+  { label: 'Neuromuscular', value: 'neuromuscular' },
+];
+const DIFFICULTIES = [
+  { label: 'Beginner', value: 'beginner' },
+  { label: 'Moderate', value: 'moderate' },
+  { label: 'Advanced', value: 'advanced' },
+];
+
+const regionLabel = (val: string) => BODY_REGIONS.find(r => r.value === val)?.label || val;
+const categoryLabel = (val: string) => CATEGORIES.find(c => c.value === val)?.label || val;
 
 export default function HEPPage() {
   const { user } = useAuth();
@@ -87,10 +113,11 @@ function ExerciseLibrary() {
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
-      if (regionFilter) params.set('bodyRegion', regionFilter);
+      if (regionFilter) params.set('body_region', regionFilter);
       if (categoryFilter) params.set('category', categoryFilter);
+      params.set('limit', '100');
       const qs = params.toString() ? `?${params}` : '';
-      const res = await api.get<any>(`/hep/exercises${qs}`);
+      const res = await api.get<any>(`/exercises${qs}`);
       setExercises(res.data || []);
     } catch {} finally { setLoading(false); }
   }
@@ -104,15 +131,15 @@ function ExerciseLibrary() {
       category: fd.get('category') as string,
       difficulty: fd.get('difficulty') as string,
       instructions: fd.get('instructions') as string,
-      sets: Number(fd.get('sets')) || 3,
-      reps: Number(fd.get('reps')) || 10,
-      holdSeconds: Number(fd.get('holdSeconds')) || 0,
+      defaultSets: Number(fd.get('sets')) || 3,
+      defaultReps: Number(fd.get('reps')) || 10,
+      defaultHoldSeconds: Number(fd.get('holdSeconds')) || 0,
     };
     try {
       if (editing) {
-        await api.put(`/hep/exercises/${editing.id}`, payload);
+        await api.put(`/exercises/${editing.id}`, payload);
       } else {
-        await api.post('/hep/exercises', payload);
+        await api.post('/exercises', payload);
       }
       setShowForm(false);
       setEditing(null);
@@ -125,15 +152,15 @@ function ExerciseLibrary() {
   async function handleDelete(id: string) {
     if (!confirm('Delete this exercise?')) return;
     try {
-      await api.delete(`/hep/exercises/${id}`);
+      await api.delete(`/exercises/${id}`);
       loadExercises();
     } catch {}
   }
 
   const difficultyColor = (d: string) => {
-    switch (d.toLowerCase()) {
+    switch (d?.toLowerCase()) {
       case 'beginner': return 'bg-green-100 text-green-700';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-700';
+      case 'moderate': return 'bg-yellow-100 text-yellow-700';
       case 'advanced': return 'bg-red-100 text-red-700';
       default: return 'bg-slate-100 text-slate-700';
     }
@@ -149,11 +176,11 @@ function ExerciseLibrary() {
         />
         <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="input max-w-[180px]">
           <option value="">All Regions</option>
-          {BODY_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+          {BODY_REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="input max-w-[180px]">
           <option value="">All Categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
         <button onClick={() => { setEditing(null); setShowForm(true); }} className="btn-primary whitespace-nowrap">+ Add Exercise</button>
       </div>
@@ -168,33 +195,33 @@ function ExerciseLibrary() {
             <label className="label">Body Region *</label>
             <select name="bodyRegion" required className="input" defaultValue={editing?.body_region || ''}>
               <option value="">Select...</option>
-              {BODY_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+              {BODY_REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div>
             <label className="label">Category *</label>
             <select name="category" required className="input" defaultValue={editing?.category || ''}>
               <option value="">Select...</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
           <div>
             <label className="label">Difficulty *</label>
-            <select name="difficulty" required className="input" defaultValue={editing?.difficulty || 'Beginner'}>
-              {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+            <select name="difficulty" required className="input" defaultValue={editing?.difficulty || 'beginner'}>
+              {DIFFICULTIES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>
           <div>
             <label className="label">Sets</label>
-            <input name="sets" type="number" min={1} className="input" defaultValue={editing?.sets || 3} />
+            <input name="sets" type="number" min={1} className="input" defaultValue={editing?.default_sets || 3} />
           </div>
           <div>
             <label className="label">Reps</label>
-            <input name="reps" type="number" min={1} className="input" defaultValue={editing?.reps || 10} />
+            <input name="reps" type="number" min={1} className="input" defaultValue={editing?.default_reps || 10} />
           </div>
           <div>
             <label className="label">Hold (sec)</label>
-            <input name="holdSeconds" type="number" min={0} className="input" defaultValue={editing?.hold_seconds || 0} />
+            <input name="holdSeconds" type="number" min={0} className="input" defaultValue={editing?.default_hold_seconds || 0} />
           </div>
           <div className="sm:col-span-2">
             <label className="label">Instructions</label>
@@ -220,11 +247,12 @@ function ExerciseLibrary() {
                 <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColor(ex.difficulty)}`}>{ex.difficulty}</span>
               </div>
               <div className="text-xs text-slate-500 space-y-1">
-                <div>Region: <span className="text-slate-700">{ex.body_region}</span></div>
-                <div>Category: <span className="text-slate-700">{ex.category}</span></div>
-                <div>{ex.sets}x{ex.reps}{ex.hold_seconds > 0 ? `, ${ex.hold_seconds}s hold` : ''}</div>
+                <div>Region: <span className="text-slate-700">{regionLabel(ex.body_region)}</span></div>
+                <div>Category: <span className="text-slate-700">{categoryLabel(ex.category)}</span></div>
+                <div>{ex.default_sets || 3}x{ex.default_reps || 10}{(ex.default_hold_seconds || 0) > 0 ? `, ${ex.default_hold_seconds}s hold` : ''}</div>
               </div>
-              {ex.instructions && <p className="text-xs text-slate-500 mt-2 line-clamp-2">{ex.instructions}</p>}
+              {ex.description && <p className="text-xs text-slate-600 mt-2 line-clamp-2">{ex.description}</p>}
+              {ex.instructions && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ex.instructions}</p>}
               <div className="flex gap-2 mt-3">
                 <button onClick={() => { setEditing(ex); setShowForm(true); }} className="text-xs text-primary-600 underline">Edit</button>
                 <button onClick={() => handleDelete(ex.id)} className="text-xs text-red-500 underline">Delete</button>
@@ -253,7 +281,7 @@ function ProgramList() {
   async function loadPrograms() {
     setLoading(true);
     try {
-      const res = await api.get<any>('/hep/programs');
+      const res = await api.get<any>('/exercises/programs');
       setPrograms(res.data || []);
     } catch {} finally { setLoading(false); }
   }
@@ -261,7 +289,7 @@ function ProgramList() {
   async function openBuilder() {
     try {
       const [exRes, ptRes] = await Promise.all([
-        api.get<any>('/hep/exercises'),
+        api.get<any>('/exercises?limit=500'),
         api.get<any>('/patients?limit=200'),
       ]);
       setLibraryExercises(exRes.data || []);
@@ -275,7 +303,7 @@ function ProgramList() {
     if (selectedExercises.find(s => s.exercise_id === ex.id)) return;
     setSelectedExercises(prev => [...prev, {
       exercise_id: ex.id, name: ex.name,
-      sets: ex.sets, reps: ex.reps, hold_seconds: ex.hold_seconds,
+      sets: ex.default_sets || 3, reps: ex.default_reps || 10, hold_seconds: ex.default_hold_seconds || 0,
       order: prev.length + 1, notes: '',
     }]);
   }
@@ -288,11 +316,11 @@ function ProgramList() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     try {
-      await api.post('/hep/programs', {
+      await api.post('/exercises/programs', {
         patientId: fd.get('patientId'),
         name: fd.get('name'),
-        exercises: selectedExercises.map(({ exercise_id, sets, reps, hold_seconds, order, notes }) => ({
-          exerciseId: exercise_id, sets, reps, holdSeconds: hold_seconds, order, notes,
+        items: selectedExercises.map(({ exercise_id, sets, reps, hold_seconds, order, notes }) => ({
+          exerciseId: exercise_id, sortOrder: order, sets, reps, holdSeconds: hold_seconds, notes,
         })),
       });
       setShowBuilder(false);
@@ -305,7 +333,7 @@ function ProgramList() {
 
   async function updateProgramStatus(id: string, status: string) {
     try {
-      await api.put(`/hep/programs/${id}/status`, { status });
+      await api.put(`/exercises/programs/${id}`, { status });
       loadPrograms();
     } catch {}
   }
@@ -318,7 +346,7 @@ function ProgramList() {
     switch (s) {
       case 'active': return 'bg-green-100 text-green-700';
       case 'completed': return 'bg-blue-100 text-blue-700';
-      case 'paused': return 'bg-yellow-100 text-yellow-700';
+      case 'archived': return 'bg-yellow-100 text-yellow-700';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -365,7 +393,7 @@ function ProgramList() {
                     className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm flex justify-between items-center disabled:opacity-40"
                   >
                     <span>{ex.name}</span>
-                    <span className="text-xs text-slate-400">{ex.body_region}</span>
+                    <span className="text-xs text-slate-400">{regionLabel(ex.body_region)}</span>
                   </button>
                 ))}
               </div>
@@ -405,7 +433,6 @@ function ProgramList() {
               <tr>
                 <th className="text-left px-4 py-3">Patient</th>
                 <th className="text-left px-4 py-3">Program</th>
-                <th className="text-center px-4 py-3">Exercises</th>
                 <th className="text-left px-4 py-3">Status</th>
                 <th className="text-left px-4 py-3">Created</th>
                 <th className="text-left px-4 py-3">Actions</th>
@@ -416,13 +443,12 @@ function ProgramList() {
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium">{p.patient_last_name}, {p.patient_first_name}</td>
                   <td className="px-4 py-3">{p.name}</td>
-                  <td className="px-4 py-3 text-center">{p.exercise_count}</td>
                   <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full ${statusColor(p.status)}`}>{p.status}</span></td>
                   <td className="px-4 py-3 text-slate-500">{new Date(p.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      {p.status === 'active' && <button onClick={() => updateProgramStatus(p.id, 'paused')} className="text-xs text-yellow-600 underline">Pause</button>}
-                      {p.status === 'paused' && <button onClick={() => updateProgramStatus(p.id, 'active')} className="text-xs text-green-600 underline">Resume</button>}
+                      {p.status === 'active' && <button onClick={() => updateProgramStatus(p.id, 'archived')} className="text-xs text-yellow-600 underline">Archive</button>}
+                      {p.status === 'archived' && <button onClick={() => updateProgramStatus(p.id, 'active')} className="text-xs text-green-600 underline">Reactivate</button>}
                       {p.status !== 'completed' && <button onClick={() => updateProgramStatus(p.id, 'completed')} className="text-xs text-blue-600 underline">Complete</button>}
                     </div>
                   </td>
