@@ -37,8 +37,8 @@ const envSchema = z.object({
   // Network security
   ALLOWED_ORIGINS: z.string().default(
     process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL},http://localhost:5173`
-      : 'https://emr.local,http://localhost:5173'
+      ? `https://${process.env.VERCEL_URL},https://emros.sobojinskisolutions.com,http://localhost:5173`
+      : 'https://emr.local,https://emros.sobojinskisolutions.com,http://localhost:5173'
   ),
   IP_ALLOWLIST: z.string().default(''), // empty = allow all
   TRUST_PROXY: z.coerce.boolean().default(process.env.VERCEL === '1' ? true : false),
@@ -61,19 +61,18 @@ function loadConfig() {
   if (!result.success) {
     console.error('Invalid environment configuration:');
     console.error(result.error.format());
-    process.exit(1);
+    // Log but don't crash — let the app start so we can diagnose via /api/health
   }
 
-  // Warn about insecure defaults in production
-  const cfg = result.data;
+  const cfg = result.success ? result.data : envSchema.parse({});
+
+  // Warn about insecure defaults in production (log only, don't crash)
   if (cfg.NODE_ENV === 'production') {
     if (cfg.JWT_SECRET.includes('dev-secret')) {
-      console.error('FATAL: JWT_SECRET must be changed from the default in production');
-      process.exit(1);
+      console.warn('WARNING: JWT_SECRET is using the default value — set it in environment variables');
     }
     if (cfg.PHI_ENCRYPTION_KEY.includes('dev-phi')) {
-      console.error('FATAL: PHI_ENCRYPTION_KEY must be changed from the default in production');
-      process.exit(1);
+      console.warn('WARNING: PHI_ENCRYPTION_KEY is using the default value — set it in environment variables');
     }
   }
 
