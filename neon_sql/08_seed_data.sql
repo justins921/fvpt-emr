@@ -60,14 +60,15 @@ INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, ro
 SELECT id, 'jobserver', '$2a$12$.pFw/LKkoD9wyxWTo7Div.KXiVGG3seZAa.hAQIOJmETDu0HFHqRq', 'Jane', 'Observer', 'read_only', NULL, NULL
 FROM clinics WHERE npi = '1234567890'
 ON CONFLICT (clinic_id, username) DO NOTHING;
-INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
-SELECT id, 'jsob', '$2a$12$.pFw/LKkoD9wyxWTo7Div.KXiVGG3seZAa.hAQIOJmETDu0HFHqRq', 'Justin', 'Sobojinski', 'dev', NULL, NULL
-FROM clinics WHERE npi = '1234567890'
-ON CONFLICT (clinic_id, username) DO NOTHING;
-
--- FVPT user (password: FoxValley2024!)
+-- FVPT users
 INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
 SELECT id, 'paula', '$2a$12$ZtIPmtSNgnqN/eN0ZI2hFutxZKFod9YtGJDbyldTRukC9ufb7Ly8W', 'Paula', 'Sobojinski', 'owner', 'DPT', '1639574820'
+FROM clinics WHERE npi = '1639574820'
+ON CONFLICT (clinic_id, username) DO NOTHING;
+
+-- FVPT Dev (password: SobDev2024!)
+INSERT INTO users (clinic_id, username, password_hash, first_name, last_name, role, credential, npi)
+SELECT id, 'jsob', '$2a$12$whTpRMGubmbRnX6QOHxPsO7sd4IhC3EKHy0xKxmUffM18DWIYoYAa', 'Justin', 'Sobojinski', 'dev', NULL, NULL
 FROM clinics WHERE npi = '1639574820'
 ON CONFLICT (clinic_id, username) DO NOTHING;
 

@@ -43,8 +43,6 @@ async function seed() {
       { username: 'tparker', firstName: 'Tom', lastName: 'Parker', role: 'biller', credential: 'Office', npi: null },
       { username: 'msantos', firstName: 'Maria', lastName: 'Santos', role: 'front_desk', credential: 'Office', npi: null },
       { username: 'jobserver', firstName: 'Jane', lastName: 'Observer', role: 'read_only', credential: null, npi: null },
-      // Developer
-      { username: 'jsob', firstName: 'Justin', lastName: 'Sobojinski', role: 'dev', credential: null, npi: null },
     ];
 
     const userIds: Record<string, string> = {};

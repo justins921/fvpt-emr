@@ -27,6 +27,44 @@ END $$;
 ALTER TABLE exercises ALTER COLUMN clinic_id DROP NOT NULL;
 
 -- ============================================================
--- 3. Track this migration
+-- 3. Fix HEP schema mismatches — add missing columns
+-- ============================================================
+
+-- exercises: add missing columns
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS default_duration_minutes INT;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+
+-- exercise_programs: add missing columns
+ALTER TABLE exercise_programs ADD COLUMN IF NOT EXISTS duration_weeks INT;
+ALTER TABLE exercise_programs ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE exercise_programs ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+ALTER TABLE exercise_programs ADD COLUMN IF NOT EXISTS source_template_id UUID REFERENCES exercise_programs(id) ON DELETE SET NULL;
+
+-- exercise_program_items: add missing columns
+ALTER TABLE exercise_program_items ADD COLUMN IF NOT EXISTS duration_minutes INT;
+ALTER TABLE exercise_program_items ADD COLUMN IF NOT EXISTS resistance VARCHAR(100);
+
+-- hep_adherence_logs: add missing columns
+ALTER TABLE hep_adherence_logs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE hep_adherence_logs ADD COLUMN IF NOT EXISTS completion_percent INT DEFAULT 0;
+ALTER TABLE hep_adherence_logs ADD COLUMN IF NOT EXISTS difficulty_rating VARCHAR(20);
+ALTER TABLE hep_adherence_logs ADD COLUMN IF NOT EXISTS logged_by UUID REFERENCES users(id);
+
+-- Rename integer exercises_completed to exercises_completed_count (if it's still an INT)
+-- Then add UUID[] exercises_completed column expected by routes
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'hep_adherence_logs' AND column_name = 'exercises_completed' AND data_type = 'integer'
+  ) THEN
+    ALTER TABLE hep_adherence_logs RENAME COLUMN exercises_completed TO exercises_completed_count;
+    ALTER TABLE hep_adherence_logs ADD COLUMN exercises_completed UUID[] NOT NULL DEFAULT '{}';
+  END IF;
+END $$;
+
+-- ============================================================
+-- 4. Track migrations
 -- ============================================================
 INSERT INTO _migrations (name) VALUES ('009_schema_fixes') ON CONFLICT DO NOTHING;
+INSERT INTO _migrations (name) VALUES ('009_fix_hep_schema') ON CONFLICT DO NOTHING;

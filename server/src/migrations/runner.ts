@@ -23,6 +23,7 @@ async function run() {
       { name: '006_add_all_features', module: await import('./006_add_all_features') },
       { name: '007_security_hardening', module: await import('./007_security_hardening') },
       { name: '008_seed_exercises_and_features', module: await import('./008_seed_exercises_and_features') },
+      { name: '009_fix_hep_schema', module: await import('./009_fix_hep_schema') },
     ];
 
     if (direction === 'up') {

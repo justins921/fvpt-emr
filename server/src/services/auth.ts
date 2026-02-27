@@ -190,26 +190,25 @@ export async function login(
     return null;
   }
 
-  const user = result.rows[0];
-
-  if (!user.is_active) {
-    await logAudit({
-      clinicId: user.clinic_id,
-      userId: user.id,
-      action: AuditAction.LOGIN_FAILED,
-      details: { reason: 'account_inactive' },
-      req,
-    });
-    return null;
+  // Username may exist in multiple clinics — try each row's password hash
+  let user: Record<string, unknown> | null = null;
+  for (const row of result.rows) {
+    if (!row.is_active) continue;
+    const match = await verifyPassword(password, row.password_hash as string);
+    if (match) {
+      user = row;
+      break;
+    }
   }
 
-  const valid = await verifyPassword(password, user.password_hash);
-  if (!valid) {
+  if (!user) {
+    // Either all accounts are inactive or no password matched
+    const firstRow = result.rows[0];
     await logAudit({
-      clinicId: user.clinic_id,
-      userId: user.id,
+      clinicId: firstRow.clinic_id,
+      userId: firstRow.id,
       action: AuditAction.LOGIN_FAILED,
-      details: { reason: 'invalid_password' },
+      details: { reason: firstRow.is_active ? 'invalid_password' : 'account_inactive' },
       req,
     });
     return null;
@@ -219,7 +218,7 @@ export async function login(
 
   // If MFA is enabled, return a challenge instead of a full session
   if (user.mfa_enabled) {
-    const mfaToken = generateMfaChallengeToken(user.id, user.clinic_id);
+    const mfaToken = generateMfaChallengeToken(user.id as string, user.clinic_id as string);
     return {
       mfaRequired: true,
       mfaToken,
