@@ -42,6 +42,12 @@ interface OutcomeMeasureDefinition {
   description: string;
   scoring: ScoringBracket[];
   categories: string[];
+  /** Per-item response range shown in the questionnaire UI */
+  itemMin: number;
+  itemMax: number;
+  /** Minimal clinically important difference, in raw score points */
+  mcid: number;
+  higherIsBetter: boolean;
 }
 
 const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
@@ -49,6 +55,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Lower Extremity Functional Scale',
     key: 'LEFS',
     maxScore: 80,
+    itemMin: 0,
+    itemMax: 4,
+    mcid: 9,
+    higherIsBetter: true,
     description: 'Self-report measure of lower extremity function. 20 items scored 0-4 each.',
     scoring: [
       { min: 0, max: 19, label: 'Severe functional limitation' },
@@ -83,6 +93,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Disabilities of the Arm, Shoulder and Hand',
     key: 'DASH',
     maxScore: 100,
+    itemMin: 1,
+    itemMax: 5,
+    mcid: 10,
+    higherIsBetter: false,
     description: 'Measures upper extremity disability and symptoms. 30 items, scored as percentage of disability.',
     scoring: [
       { min: 0, max: 20, label: 'No/little disability' },
@@ -128,6 +142,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Neck Disability Index',
     key: 'NDI',
     maxScore: 50,
+    itemMin: 0,
+    itemMax: 5,
+    mcid: 5,
+    higherIsBetter: false,
     description: 'Measures self-rated neck disability. 10 items scored 0-5 each.',
     scoring: [
       { min: 0, max: 4, label: 'No disability' },
@@ -153,6 +171,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Oswestry Disability Index',
     key: 'Oswestry',
     maxScore: 50,
+    itemMin: 0,
+    itemMax: 5,
+    mcid: 10,
+    higherIsBetter: false,
     description: 'Measures permanent functional disability for low back pain. 10 items scored 0-5 each.',
     scoring: [
       { min: 0, max: 4, label: 'No disability' },
@@ -178,6 +200,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Shoulder Pain and Disability Index',
     key: 'SPADI',
     maxScore: 130,
+    itemMin: 0,
+    itemMax: 10,
+    mcid: 13,
+    higherIsBetter: false,
     description: 'Measures shoulder pain and disability. 13 items: 5 pain items (0-10) and 8 disability items (0-10).',
     scoring: [
       { min: 0, max: 25, label: 'Minimal pain/disability' },
@@ -206,6 +232,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Berg Balance Scale',
     key: 'Berg Balance',
     maxScore: 56,
+    itemMin: 0,
+    itemMax: 4,
+    mcid: 5,
+    higherIsBetter: true,
     description: 'Measures static and dynamic balance. 14 items scored 0-4 each.',
     scoring: [
       { min: 0, max: 20, label: 'High fall risk (wheelchair bound)' },
@@ -233,6 +263,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Numeric Pain Rating Scale',
     key: 'NPRS',
     maxScore: 10,
+    itemMin: 0,
+    itemMax: 10,
+    mcid: 2,
+    higherIsBetter: false,
     description: 'Patient rates pain intensity on 0-10 scale. Simple, reliable, widely used.',
     scoring: [
       { min: 0, max: 0, label: 'No pain' },
@@ -248,6 +282,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Patient-Specific Functional Scale',
     key: 'PSFS',
     maxScore: 10,
+    itemMin: 0,
+    itemMax: 10,
+    mcid: 2,
+    higherIsBetter: true,
     description: 'Patient identifies up to 5 activities and rates ability 0-10 each. Average is the score.',
     scoring: [
       { min: 0, max: 3, label: 'Severe functional limitation' },
@@ -267,6 +305,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Quick Disabilities of the Arm, Shoulder and Hand',
     key: 'QuickDASH',
     maxScore: 100,
+    itemMin: 1,
+    itemMax: 5,
+    mcid: 8,
+    higherIsBetter: false,
     description: 'Shortened version of the DASH. 11 items, scored as percentage of disability.',
     scoring: [
       { min: 0, max: 20, label: 'No/little disability' },
@@ -293,6 +335,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Patient Health Questionnaire-9',
     key: 'PHQ-9',
     maxScore: 27,
+    itemMin: 0,
+    itemMax: 3,
+    mcid: 5,
+    higherIsBetter: false,
     description: 'Screens for depression severity. 9 items scored 0-3 each.',
     scoring: [
       { min: 0, max: 4, label: 'Minimal depression' },
@@ -317,6 +363,10 @@ const OUTCOME_MEASURE_DEFINITIONS: OutcomeMeasureDefinition[] = [
     name: 'Generalized Anxiety Disorder-7',
     key: 'GAD-7',
     maxScore: 21,
+    itemMin: 0,
+    itemMax: 3,
+    mcid: 4,
+    higherIsBetter: false,
     description: 'Screens for generalized anxiety severity. 7 items scored 0-3 each.',
     scoring: [
       { min: 0, max: 4, label: 'Minimal anxiety' },
@@ -386,20 +436,19 @@ function calculateScoreFromResponses(measureType: string, responses: Record<stri
 
 // ── Routes ──
 
-// GET / - List outcome measures for a patient
+// GET / - List outcome measures (optionally filtered by patient)
 router.get('/', requirePermission(Permission.OUTCOME_VIEW), async (req: Request, res: Response) => {
   try {
-    const { patient_id, measure_type, date_from, date_to } = req.query;
+    const { patient_id, measure_type, date_from, date_to, limit = '100' } = req.query;
 
-    if (!patient_id) {
-      res.status(400).json({ success: false, error: 'patient_id is required' });
-      return;
+    let whereClause = 'om.clinic_id = $1';
+    const params: unknown[] = [req.auth!.clinicId];
+    let paramIndex = 2;
+
+    if (patient_id) {
+      whereClause += ` AND om.patient_id = $${paramIndex++}`;
+      params.push(patient_id);
     }
-
-    let whereClause = 'om.clinic_id = $1 AND om.patient_id = $2';
-    const params: unknown[] = [req.auth!.clinicId, patient_id];
-    let paramIndex = 3;
-
     if (measure_type) {
       whereClause += ` AND om.measure_type = $${paramIndex++}`;
       params.push(measure_type);
@@ -413,13 +462,18 @@ router.get('/', requirePermission(Permission.OUTCOME_VIEW), async (req: Request,
       params.push(date_to);
     }
 
+    const limitNum = Math.min(500, Math.max(1, parseInt(limit as string, 10) || 100));
+
     const result = await query(
-      `SELECT om.*, u.first_name as administered_by_first_name, u.last_name as administered_by_last_name
+      `SELECT om.*, u.first_name as administered_by_first_name, u.last_name as administered_by_last_name,
+              p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn as patient_mrn
        FROM outcome_measures om
        LEFT JOIN users u ON om.administered_by = u.id
+       LEFT JOIN patients p ON om.patient_id = p.id
        WHERE ${whereClause}
-       ORDER BY om.administered_date DESC`,
-      params
+       ORDER BY om.administered_date DESC
+       LIMIT $${paramIndex}`,
+      [...params, limitNum]
     );
 
     res.json({ success: true, data: result.rows });
@@ -484,6 +538,35 @@ router.get('/:id', requirePermission(Permission.OUTCOME_VIEW), async (req: Reque
     }
 
     res.json({ success: true, data: result.rows[0] });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id - Delete an outcome measure
+router.delete('/:id', requirePermission(Permission.OUTCOME_CREATE), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `DELETE FROM outcome_measures WHERE id = $1 AND clinic_id = $2 RETURNING id, measure_type`,
+      [req.params.id, req.auth!.clinicId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Outcome measure not found' });
+      return;
+    }
+
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.OUTCOME_CREATE,
+      resourceType: 'outcome_measure',
+      resourceId: req.params.id,
+      details: { action: 'delete', measureType: result.rows[0].measure_type },
+      req,
+    });
+
+    res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }

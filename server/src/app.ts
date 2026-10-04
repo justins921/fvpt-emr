@@ -41,6 +41,7 @@ import statementRoutes from './routes/statements';
 import paymentRoutes from './routes/payments';
 import authorizationRoutes from './routes/authorizations';
 import noteUtilRoutes from './routes/note-utils';
+import noteTemplateRoutes from './routes/note-templates';
 import referringProviderRoutes from './routes/referring-providers';
 
 const app = express();
@@ -160,6 +161,7 @@ app.use('/api/statements', statementRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/authorizations', authorizationRoutes);
 app.use('/api/note-utils', noteUtilRoutes);
+app.use('/api/note-templates', noteTemplateRoutes);
 app.use('/api/referring-providers', referringProviderRoutes);
 
 // 404 handler for API routes

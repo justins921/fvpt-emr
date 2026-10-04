@@ -1,12 +1,234 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { authenticate, validateSession, requirePermission, tenantScope } from '../middleware/auth';
 import { query, transaction } from '../db';
+import { config } from '../config';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
 import { sendSms, isSmsConfigured, renderTemplate, normalizePhoneNumber } from '../services/sms';
 
 const router = Router();
+
+// ─────────────────────────────────────────────────────────────
+// Public routes (no JWT — registered BEFORE the auth middleware)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Validate Twilio's X-Twilio-Signature header.
+ * Twilio signs: full URL + sorted POST params concatenated, HMAC-SHA1 with the auth token.
+ */
+function validateTwilioSignature(req: Request): boolean {
+  const signature = req.headers['x-twilio-signature'];
+  if (!signature || typeof signature !== 'string') return false;
+  const authToken = config.TWILIO_AUTH_TOKEN;
+  if (!authToken) return false;
+
+  // Reconstruct the URL exactly as Twilio saw it (respect proxy headers)
+  const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+  const host = (req.headers['x-forwarded-host'] as string) || req.get('host');
+  const url = `${protocol}://${host}${req.originalUrl}`;
+
+  const params = (req.body || {}) as Record<string, unknown>;
+  let data = url;
+  for (const key of Object.keys(params).sort()) {
+    data += key + String(params[key]);
+  }
+
+  const expected = crypto.createHmac('sha1', authToken).update(data).digest('base64');
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  return sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+}
+
+// ── Twilio webhook for inbound messages ──
+// NOTE: Twilio cannot send our JWT, so this lives outside the auth middleware.
+// When Twilio is configured, the X-Twilio-Signature header is required.
+router.post('/webhook/inbound', async (req: Request, res: Response) => {
+  try {
+    if (isSmsConfigured() && !validateTwilioSignature(req)) {
+      console.warn('Rejected inbound SMS webhook: invalid Twilio signature');
+      res.status(403).type('text/xml').send('<Response></Response>');
+      return;
+    }
+
+    const { From, Body, MessageSid } = req.body;
+
+    if (!From || !Body) {
+      res.status(200).type('text/xml').send('<Response></Response>');
+      return;
+    }
+
+    // Find the patient by phone number across all clinics
+    const normalized = normalizePhoneNumber(From);
+    if (!normalized) {
+      res.status(200).type('text/xml').send('<Response></Response>');
+      return;
+    }
+
+    // Look for patients matching this phone number
+    const result = await query(
+      `SELECT p.id as patient_id, p.clinic_id, p.first_name, p.last_name
+       FROM patients p
+       WHERE REPLACE(REPLACE(REPLACE(REPLACE(p.phone, '-', ''), '(', ''), ')', ''), ' ', '')
+             LIKE '%' || $1
+       AND p.is_active = true
+       LIMIT 1`,
+      [normalized.replace('+1', '')]
+    );
+
+    if (result.rows.length > 0) {
+      const patient = result.rows[0];
+      await query(
+        `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, from_number, external_id)
+         VALUES ($1, $2, 'inbound', $3, 'received', 'manual', $4, $5)`,
+        [patient.clinic_id, patient.patient_id, Body, From, MessageSid || null]
+      );
+    }
+
+    // Respond with empty TwiML
+    res.status(200).type('text/xml').send('<Response></Response>');
+  } catch (err) {
+    console.error('Webhook error:', err);
+    res.status(200).type('text/xml').send('<Response></Response>');
+  }
+});
+
+const DEFAULT_REMINDER_TEMPLATE =
+  'Hi {{first_name}}, reminder: you have an appointment at {{clinic_name}} on {{appointment_date}} at {{appointment_time}}. Call {{clinic_phone}} to reschedule. Reply STOP to opt out.';
+
+function appointmentContext(patient: any, clinic: any) {
+  return {
+    first_name: patient.first_name,
+    last_name: patient.last_name,
+    appointment_date: patient.start_time
+      ? new Date(patient.start_time).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      : '',
+    appointment_time: patient.start_time
+      ? new Date(patient.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      : '',
+    clinic_name: clinic.name,
+    clinic_phone: clinic.phone,
+  };
+}
+
+// ── Cron: automated daily appointment reminders (all clinics) ──
+// Trigger with: GET /api/messaging/cron/daily-reminders
+// Auth: Authorization: Bearer <CRON_SECRET>  OR  ?secret=<CRON_SECRET>
+// Schedule externally (system cron, cron-job.org, etc.) once daily, e.g. 8am clinic time.
+// Safe to call more than once: patients already reminded in the last 20h are skipped.
+router.get('/cron/daily-reminders', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const secret = bearer || (typeof req.query.secret === 'string' ? req.query.secret : null);
+    if (!config.CRON_SECRET || !secret || secret !== config.CRON_SECRET) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    if (!isSmsConfigured()) {
+      res.json({ success: true, data: { skipped: true, reason: 'SMS provider not configured' } });
+      return;
+    }
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().substring(0, 10);
+    const dayAfter = new Date(tomorrow);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+    const dayAfterStr = dayAfter.toISOString().substring(0, 10);
+
+    const clinics = await query(`SELECT id, name, phone FROM clinics`);
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+    const errors: string[] = [];
+
+    for (const clinic of clinics.rows) {
+      // Clinic's default reminder template, or the built-in fallback
+      const tmpl = await query(
+        `SELECT body FROM sms_templates
+         WHERE clinic_id = $1 AND template_type = 'reminder' AND is_active = true
+         ORDER BY created_at LIMIT 1`,
+        [clinic.id]
+      );
+      const templateBody = tmpl.rows[0]?.body || DEFAULT_REMINDER_TEMPLATE;
+
+      const appts = await query(
+        `SELECT DISTINCT p.id, p.first_name, p.last_name, p.phone, a.start_time
+         FROM appointments a
+         JOIN patients p ON a.patient_id = p.id
+         WHERE a.clinic_id = $1
+           AND a.status = 'scheduled'
+           AND a.start_time >= $2
+           AND a.start_time < $3
+           AND p.phone IS NOT NULL
+           AND p.is_active = true
+         ORDER BY a.start_time`,
+        [clinic.id, `${tomorrowStr}T00:00:00Z`, `${dayAfterStr}T00:00:00Z`]
+      );
+
+      for (const patient of appts.rows) {
+        // Idempotency: skip patients already reminded in the last 20 hours
+        const dup = await query(
+          `SELECT 1 FROM sms_messages
+           WHERE clinic_id = $1 AND patient_id = $2
+             AND message_type = 'reminder' AND direction = 'outbound'
+             AND created_at > NOW() - INTERVAL '20 hours'
+           LIMIT 1`,
+          [clinic.id, patient.id]
+        );
+        if (dup.rows.length > 0) {
+          totalSkipped++;
+          continue;
+        }
+
+        const normalizedPhone = normalizePhoneNumber(patient.phone);
+        if (!normalizedPhone) {
+          totalFailed++;
+          errors.push(`${patient.first_name} ${patient.last_name}: invalid phone`);
+          continue;
+        }
+
+        const body = renderTemplate(templateBody, appointmentContext(patient, clinic));
+        const smsResult = await sendSms(normalizedPhone, body);
+
+        await query(
+          `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, to_number, from_number, external_id, error_message, sent_at)
+           VALUES ($1, $2, 'outbound', $3, $4, 'reminder', $5, $6, $7, $8, $9)`,
+          [
+            clinic.id,
+            patient.id,
+            body,
+            smsResult.success ? 'sent' : 'failed',
+            normalizedPhone,
+            config.TWILIO_PHONE_NUMBER,
+            smsResult.externalId || null,
+            smsResult.error || null,
+            smsResult.success ? new Date().toISOString() : null,
+          ]
+        );
+
+        if (smsResult.success) {
+          totalSent++;
+        } else {
+          totalFailed++;
+          errors.push(`${patient.first_name} ${patient.last_name}: ${smsResult.error}`);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { totalSent, totalFailed, totalSkipped, errors: errors.slice(0, 10) },
+    });
+  } catch (err) {
+    console.error('Cron reminders error:', err);
+    res.status(500).json({ success: false, error: 'Failed to send reminders' });
+  }
+});
+
 router.use(authenticate, validateSession, tenantScope);
 
 // ── Get SMS configuration status ──
@@ -445,52 +667,6 @@ router.delete('/templates/:id', requirePermission(Permission.MESSAGING_MANAGE), 
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to delete template' });
-  }
-});
-
-// ── Twilio webhook for inbound messages ──
-// NOTE: This endpoint does NOT use standard auth - it uses Twilio signature validation
-router.post('/webhook/inbound', async (req: Request, res: Response) => {
-  try {
-    const { From, Body, MessageSid } = req.body;
-
-    if (!From || !Body) {
-      res.status(400).send('<Response></Response>');
-      return;
-    }
-
-    // Find the patient by phone number across all clinics
-    const normalized = normalizePhoneNumber(From);
-    if (!normalized) {
-      res.status(200).type('text/xml').send('<Response></Response>');
-      return;
-    }
-
-    // Look for patients matching this phone number
-    const result = await query(
-      `SELECT p.id as patient_id, p.clinic_id, p.first_name, p.last_name
-       FROM patients p
-       WHERE REPLACE(REPLACE(REPLACE(REPLACE(p.phone, '-', ''), '(', ''), ')', ''), ' ', '')
-             LIKE '%' || $1
-       AND p.is_active = true
-       LIMIT 1`,
-      [normalized.replace('+1', '')]
-    );
-
-    if (result.rows.length > 0) {
-      const patient = result.rows[0];
-      await query(
-        `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, from_number, external_id)
-         VALUES ($1, $2, 'inbound', $3, 'received', 'manual', $4, $5)`,
-        [patient.clinic_id, patient.patient_id, Body, From, MessageSid || null]
-      );
-    }
-
-    // Respond with empty TwiML
-    res.status(200).type('text/xml').send('<Response></Response>');
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(200).type('text/xml').send('<Response></Response>');
   }
 });
 

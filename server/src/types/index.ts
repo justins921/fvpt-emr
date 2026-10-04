@@ -155,6 +155,10 @@ export enum Permission {
   TEXT_EXPANDER_VIEW = 'text_expander:view',
   TEXT_EXPANDER_MANAGE = 'text_expander:manage',
 
+  // Note Templates
+  NOTE_TEMPLATE_VIEW = 'note_template:view',
+  NOTE_TEMPLATE_MANAGE = 'note_template:manage',
+
   // Authorizations
   AUTHORIZATION_VIEW = 'authorization:view',
   AUTHORIZATION_MANAGE = 'authorization:manage',
@@ -211,6 +215,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REFERRING_PROVIDER_VIEW,
     Permission.TEXT_EXPANDER_VIEW,
     Permission.TEXT_EXPANDER_MANAGE,
+    Permission.NOTE_TEMPLATE_VIEW,
+    Permission.NOTE_TEMPLATE_MANAGE,
     Permission.AUTHORIZATION_VIEW,
   ],
   [Role.FRONT_DESK]: [

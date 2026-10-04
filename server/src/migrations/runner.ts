@@ -24,6 +24,7 @@ async function run() {
       { name: '007_security_hardening', module: await import('./007_security_hardening') },
       { name: '008_seed_exercises_and_features', module: await import('./008_seed_exercises_and_features') },
       { name: '009_fix_hep_schema', module: await import('./009_fix_hep_schema') },
+      { name: '010_add_note_templates', module: await import('./010_add_note_templates') },
     ];
 
     if (direction === 'up') {

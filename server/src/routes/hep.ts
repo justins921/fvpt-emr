@@ -329,9 +329,9 @@ router.post('/programs/:id/items', requirePermission(Permission.HEP_EDIT), async
       return;
     }
 
-    // Verify exercise exists and belongs to this clinic
+    // Verify exercise exists and belongs to this clinic (or is a global exercise)
     const exerciseCheck = await query(
-      `SELECT id FROM exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
+      `SELECT id FROM exercises WHERE id = $1 AND (clinic_id = $2 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true`,
       [input.exerciseId, req.auth!.clinicId]
     );
     if (exerciseCheck.rows.length === 0) {
@@ -807,11 +807,11 @@ router.post('/', requirePermission(Permission.HEP_CREATE), async (req: Request, 
   }
 });
 
-// Get single exercise
+// Get single exercise (own clinic's or global)
 router.get('/:id', requirePermission(Permission.HEP_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT * FROM exercises WHERE id = $1 AND clinic_id = $2 AND is_active = true`,
+      `SELECT * FROM exercises WHERE id = $1 AND (clinic_id = $2 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true`,
       [req.params.id, req.auth!.clinicId]
     );
     if (result.rows.length === 0) {

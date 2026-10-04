@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 interface PatientData {
   id: string; mrn: string; first_name: string; last_name: string;
@@ -140,14 +141,63 @@ function PatientNotes({ patientId }: { patientId: string }) {
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [noteType, setNoteType] = useState('daily_soap');
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [formKey, setFormKey] = useState(0);
+  const [prefill, setPrefill] = useState<any>(null);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const { user } = useAuth();
+  const canManageTemplates = ['owner', 'admin', 'dev', 'therapist'].includes(user?.role || '');
 
   useEffect(() => { loadNotes(); }, []);
+
+  useEffect(() => {
+    if (showForm) {
+      setPrefill(null);
+      loadTemplates();
+    }
+  }, [showForm, noteType]);
 
   async function loadNotes() {
     try {
       const res = await api.get<any>(`/notes/patient/${patientId}`);
       setNotes(res.data || []);
     } catch {} finally { setLoading(false); }
+  }
+
+  async function loadTemplates() {
+    try {
+      const res = await api.get<any>(`/note-templates?noteType=${noteType}`);
+      setTemplates(res.data || []);
+    } catch { /* templates are optional */ }
+  }
+
+  function applyTemplate(t: any) {
+    setPrefill({
+      subjective: t.subjective_template || '',
+      objective: t.objective_template || '',
+      assessment: t.assessment_template || '',
+      plan: t.plan_template || '',
+    });
+    setFormKey(k => k + 1);
+  }
+
+  async function copyFromLastNote() {
+    try {
+      const res = await api.get<any>(`/notes/patient/${patientId}/latest?noteType=${noteType}`);
+      const n = res.data;
+      setPrefill({
+        subjective: n.subjective || '',
+        objective: n.objective || '',
+        assessment: n.assessment || '',
+        plan: n.plan || '',
+        cptCodes: (n.cpt_codes || []).join(', '),
+        icd10Codes: (n.icd10_codes || []).join(', '),
+      });
+      setFormKey(k => k + 1);
+    } catch {
+      alert('No prior note of this type found to copy from.');
+    }
   }
 
   async function handleCreateNote(e: React.FormEvent<HTMLFormElement>) {
@@ -188,15 +238,43 @@ function PatientNotes({ patientId }: { patientId: string }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold">Clinical Notes</h3>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">+ New Note</button>
+        <div className="flex gap-2">
+          {canManageTemplates && (
+            <button onClick={() => setShowTemplateManager(!showTemplateManager)} className="btn-secondary text-sm">
+              Templates
+            </button>
+          )}
+          <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">+ New Note</button>
+        </div>
       </div>
 
+      {showTemplateManager && canManageTemplates && (
+        <div className="card"><TemplateManager /></div>
+      )}
+
       {showForm && (
-        <form onSubmit={handleCreateNote} className="card space-y-3">
+        <form key={formKey} onSubmit={handleCreateNote} className="card space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select
+              className="input flex-1"
+              defaultValue=""
+              onChange={e => {
+                const t = templates.find(x => x.id === e.target.value);
+                if (t) applyTemplate(t);
+                e.target.value = '';
+              }}
+            >
+              <option value="">Apply a template…</option>
+              {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <button type="button" onClick={copyFromLastNote} className="btn-secondary text-sm whitespace-nowrap">
+              Copy from last note
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Note Type</label>
-              <select name="noteType" required className="input">
+              <select name="noteType" required className="input" value={noteType} onChange={e => setNoteType(e.target.value)}>
                 <option value="daily_soap">Daily SOAP</option>
                 <option value="evaluation">Evaluation</option>
                 <option value="progress">Progress Note</option>
@@ -205,18 +283,18 @@ function PatientNotes({ patientId }: { patientId: string }) {
             </div>
             <div>
               <label className="label">CPT Codes (comma sep)</label>
-              <input name="cptCodes" placeholder="97110, 97140" className="input" />
+              <input name="cptCodes" placeholder="97110, 97140" className="input" defaultValue={prefill?.cptCodes ?? ''} />
             </div>
             <div>
               <label className="label">Treatment Time (min)</label>
               <input name="treatmentTimeMinutes" type="number" className="input" />
             </div>
           </div>
-          <div><label className="label">Subjective</label><textarea name="subjective" rows={3} className="input" placeholder="Patient reports..." /></div>
-          <div><label className="label">Objective</label><textarea name="objective" rows={3} className="input" placeholder="Observed..." /></div>
-          <div><label className="label">Assessment</label><textarea name="assessment" rows={2} className="input" placeholder="Assessment..." /></div>
-          <div><label className="label">Plan</label><textarea name="plan" rows={2} className="input" placeholder="Plan..." /></div>
-          <div><label className="label">ICD-10 Codes (comma sep)</label><input name="icd10Codes" placeholder="M54.5, M79.3" className="input" /></div>
+          <div><label className="label">Subjective</label><textarea name="subjective" rows={3} className="input" placeholder="Patient reports..." defaultValue={prefill?.subjective ?? ''} /></div>
+          <div><label className="label">Objective</label><textarea name="objective" rows={3} className="input" placeholder="Observed..." defaultValue={prefill?.objective ?? ''} /></div>
+          <div><label className="label">Assessment</label><textarea name="assessment" rows={2} className="input" placeholder="Assessment..." defaultValue={prefill?.assessment ?? ''} /></div>
+          <div><label className="label">Plan</label><textarea name="plan" rows={2} className="input" placeholder="Plan..." defaultValue={prefill?.plan ?? ''} /></div>
+          <div><label className="label">ICD-10 Codes (comma sep)</label><input name="icd10Codes" placeholder="M54.5, M79.3" className="input" defaultValue={prefill?.icd10Codes ?? ''} /></div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
             <button type="submit" className="btn-primary">Save Draft</button>
@@ -254,6 +332,135 @@ function PatientNotes({ patientId }: { patientId: string }) {
             {note.signed_at && <div className="mt-2 text-xs text-green-600">Signed by {note.signer_first_name} {note.signer_last_name} on {new Date(note.signed_at).toLocaleString()}</div>}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const TEMPLATE_TYPE_LABELS: Record<string, string> = {
+  daily_soap: 'Daily SOAP',
+  evaluation: 'Evaluation',
+  progress: 'Progress Note',
+  discharge: 'Discharge',
+};
+
+function TemplateManager() {
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [form, setForm] = useState<any>(null);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    try {
+      const res = await api.get<any>('/note-templates?includeInactive=true');
+      setTemplates(res.data || []);
+    } catch {}
+  }
+
+  function newTemplate() {
+    setForm({ name: '', noteType: 'daily_soap', subjectiveTemplate: '', objectiveTemplate: '', assessmentTemplate: '', planTemplate: '', isActive: true });
+  }
+
+  function editTemplate(t: any) {
+    setForm({
+      id: t.id,
+      name: t.name,
+      noteType: t.note_type,
+      subjectiveTemplate: t.subjective_template || '',
+      objectiveTemplate: t.objective_template || '',
+      assessmentTemplate: t.assessment_template || '',
+      planTemplate: t.plan_template || '',
+      isActive: t.is_active,
+    });
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete template "${name}"?`)) return;
+    try {
+      await api.delete(`/note-templates/${id}`);
+      load();
+    } catch {
+      alert('Delete failed');
+    }
+  }
+
+  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const body = {
+      name: fd.get('name'),
+      noteType: fd.get('noteType'),
+      subjectiveTemplate: (fd.get('subjectiveTemplate') as string) || null,
+      objectiveTemplate: (fd.get('objectiveTemplate') as string) || null,
+      assessmentTemplate: (fd.get('assessmentTemplate') as string) || null,
+      planTemplate: (fd.get('planTemplate') as string) || null,
+      isActive: fd.get('isActive') === 'on',
+    };
+    try {
+      if (form.id) await api.put(`/note-templates/${form.id}`, body);
+      else await api.post('/note-templates', body);
+      setForm(null);
+      load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Save failed');
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <h4 className="font-medium text-sm">Note Templates</h4>
+        <button onClick={newTemplate} className="btn-secondary text-xs">+ New Template</button>
+      </div>
+
+      {form && (
+        <form onSubmit={handleSave} className="card space-y-3 bg-slate-50">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Name *</label>
+              <input name="name" required className="input" defaultValue={form.name} placeholder="e.g. Daily SOAP - Shoulder" />
+            </div>
+            <div>
+              <label className="label">Note Type *</label>
+              <select name="noteType" className="input" defaultValue={form.noteType}>
+                <option value="daily_soap">Daily SOAP</option>
+                <option value="evaluation">Evaluation</option>
+                <option value="progress">Progress Note</option>
+                <option value="discharge">Discharge</option>
+              </select>
+            </div>
+          </div>
+          <div><label className="label">Subjective template</label><textarea name="subjectiveTemplate" rows={2} className="input" defaultValue={form.subjectiveTemplate} /></div>
+          <div><label className="label">Objective template</label><textarea name="objectiveTemplate" rows={2} className="input" defaultValue={form.objectiveTemplate} /></div>
+          <div><label className="label">Assessment template</label><textarea name="assessmentTemplate" rows={2} className="input" defaultValue={form.assessmentTemplate} /></div>
+          <div><label className="label">Plan template</label><textarea name="planTemplate" rows={2} className="input" defaultValue={form.planTemplate} /></div>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="isActive" defaultChecked={form.isActive} /> Active
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setForm(null)} className="btn-secondary text-sm">Cancel</button>
+              <button type="submit" className="btn-primary text-sm">Save Template</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="divide-y">
+        {templates.map(t => (
+          <div key={t.id} className="py-2 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                {t.name}
+                {!t.is_active && <span className="badge-gray ml-2">inactive</span>}
+              </div>
+              <div className="text-xs text-slate-500">{TEMPLATE_TYPE_LABELS[t.note_type] || t.note_type}</div>
+            </div>
+            <button onClick={() => editTemplate(t)} className="text-xs text-blue-600 underline">Edit</button>
+            <button onClick={() => handleDelete(t.id, t.name)} className="text-xs text-red-600 underline">Delete</button>
+          </div>
+        ))}
+        {templates.length === 0 && <p className="text-sm text-slate-500 py-2">No templates yet. Create one above.</p>}
       </div>
     </div>
   );

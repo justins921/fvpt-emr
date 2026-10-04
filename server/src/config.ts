@@ -48,6 +48,9 @@ const envSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
 
+  // Shared secret for automation endpoints (cron). Required to trigger /api/messaging/cron/*.
+  CRON_SECRET: z.string().optional(),
+
   // Data retention (days) — 0 = keep forever
   AUDIT_LOG_RETENTION_DAYS: z.coerce.number().default(2555), // ~7 years (HIPAA minimum)
   SESSION_CLEANUP_DAYS: z.coerce.number().default(90),

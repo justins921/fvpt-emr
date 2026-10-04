@@ -22,6 +22,35 @@ const noteSchema = z.object({
   treatmentTimeMinutes: z.number().int().min(0).optional().nullable(),
 });
 
+// Get latest note for a patient (copy-forward source picker)
+router.get('/patient/:patientId/latest', requirePermission(Permission.NOTE_VIEW), async (req: Request, res: Response) => {
+  try {
+    const noteType = typeof req.query.noteType === 'string' ? req.query.noteType : undefined;
+
+    let sql = `
+      SELECT cn.*, u.first_name as author_first_name, u.last_name as author_last_name
+      FROM clinical_notes cn
+      JOIN users u ON cn.author_id = u.id
+      WHERE cn.clinic_id = $1 AND cn.patient_id = $2`;
+    const params: unknown[] = [req.auth!.clinicId, req.params.patientId];
+
+    if (noteType) {
+      sql += ` AND cn.note_type = $${params.length + 1}`;
+      params.push(noteType);
+    }
+    sql += ` ORDER BY cn.created_at DESC LIMIT 1`;
+
+    const result = await query(sql, params);
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'No prior notes found' });
+      return;
+    }
+    res.json({ success: true, data: result.rows[0] });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // List notes for a patient
 router.get('/patient/:patientId', requirePermission(Permission.NOTE_VIEW), async (req: Request, res: Response) => {
   try {
