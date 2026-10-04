@@ -347,6 +347,7 @@ const TEMPLATE_TYPE_LABELS: Record<string, string> = {
 function TemplateManager() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [form, setForm] = useState<any>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -374,8 +375,13 @@ function TemplateManager() {
     });
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete template "${name}"?`)) return;
+  // Two-click inline confirmation (no native dialog — testable and mobile-friendly)
+  async function handleDelete(id: string) {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      return;
+    }
+    setConfirmDeleteId(null);
     try {
       await api.delete(`/note-templates/${id}`);
       load();
@@ -457,7 +463,14 @@ function TemplateManager() {
               <div className="text-xs text-slate-500">{TEMPLATE_TYPE_LABELS[t.note_type] || t.note_type}</div>
             </div>
             <button onClick={() => editTemplate(t)} className="text-xs text-blue-600 underline">Edit</button>
-            <button onClick={() => handleDelete(t.id, t.name)} className="text-xs text-red-600 underline">Delete</button>
+            {confirmDeleteId === t.id ? (
+              <span className="flex gap-2 items-center">
+                <button onClick={() => handleDelete(t.id)} className="text-xs text-red-700 font-semibold underline">Confirm delete</button>
+                <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-500 underline">Cancel</button>
+              </span>
+            ) : (
+              <button onClick={() => handleDelete(t.id)} className="text-xs text-red-600 underline">Delete</button>
+            )}
           </div>
         ))}
         {templates.length === 0 && <p className="text-sm text-slate-500 py-2">No templates yet. Create one above.</p>}
