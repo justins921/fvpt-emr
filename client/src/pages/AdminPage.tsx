@@ -8,10 +8,10 @@ export default function AdminPage() {
   const location = useLocation();
   const { user } = useAuth();
   const tabs = [
-    { path: '/admin', label: 'Users' },
-    { path: '/admin/audit', label: 'Audit Log' },
-    { path: '/admin/settings', label: 'Settings' },
-    { path: '/admin/import', label: 'Import Data' },
+    { path: '/app/admin', label: 'Users' },
+    { path: '/app/admin/audit', label: 'Audit Log' },
+    { path: '/app/admin/settings', label: 'Settings' },
+    { path: '/app/admin/import', label: 'Import Data' },
   ];
 
   if (!['owner', 'admin', 'dev'].includes(user?.role || '')) {
@@ -29,7 +29,7 @@ export default function AdminPage() {
         ))}
       </div>
       <Routes>
-        <Route index element={<UsersManager />} />
+        <Route index element={<UsersManager currentUserId={user?.id} />} />
         <Route path="audit" element={<AuditViewer />} />
         <Route path="settings" element={<SettingsPanel />} />
         <Route path="import" element={<ImportPage />} />
@@ -38,7 +38,7 @@ export default function AdminPage() {
   );
 }
 
-function UsersManager() {
+function UsersManager({ currentUserId }: { currentUserId?: string }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -64,6 +64,7 @@ function UsersManager() {
   }
 
   async function deactivateUser(id: string) {
+    if (id === currentUserId) { alert("You can't deactivate your own account."); return; }
     if (!confirm('Deactivate this user? Their sessions will be revoked.')) return;
     try { await api.post(`/users/${id}/deactivate`); loadUsers(); } catch {}
   }
@@ -131,7 +132,7 @@ function UsersManager() {
                 <td className="px-4 py-3">{u.credential ? <span className="badge-blue">{u.credential}</span> : <span className="text-slate-400">-</span>}</td>
                 <td className="px-4 py-3"><span className={u.is_active ? 'badge-green' : 'badge-red'}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
-                <td className="px-4 py-3">{u.is_active && <button onClick={() => deactivateUser(u.id)} className="text-xs text-red-600 underline">Deactivate</button>}</td>
+                <td className="px-4 py-3">{u.is_active && u.id !== currentUserId && <button onClick={() => deactivateUser(u.id)} className="text-xs text-red-600 underline">Deactivate</button>}</td>
               </tr>
             ))}
           </tbody>

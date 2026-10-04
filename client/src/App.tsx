@@ -92,7 +92,10 @@ export default function App() {
         <Route path="payments/*" element={<PaymentsPage />} />
         <Route path="authorizations" element={<AuthorizationsPage />} />
         <Route path="referring-providers" element={<ReferringProvidersPage />} />
+        {/* Safety net: never strand the user on a blank page for a bad/old link */}
+        <Route path="*" element={<Navigate to="/app" replace />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

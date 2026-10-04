@@ -5,9 +5,9 @@ import { api } from '../services/api';
 export default function BillingPage() {
   const location = useLocation();
   const tabs = [
-    { path: '/billing', label: 'Claims' },
-    { path: '/billing/aging', label: 'A/R Aging' },
-    { path: '/billing/era', label: 'ERA Import' },
+    { path: '/app/billing', label: 'Claims' },
+    { path: '/app/billing/aging', label: 'A/R Aging' },
+    { path: '/app/billing/era', label: 'ERA Import' },
   ];
 
   return (
@@ -111,7 +111,7 @@ function ClaimsList() {
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-xs">{c.claim_number}</td>
                   <td className="px-4 py-3">
-                    <Link to={`/patients/${c.patient_id}`} className="text-primary-600 hover:underline">
+                    <Link to={`/app/patients/${c.patient_id}`} className="text-primary-600 hover:underline">
                       {c.patient_last_name}, {c.patient_first_name}
                     </Link>
                   </td>

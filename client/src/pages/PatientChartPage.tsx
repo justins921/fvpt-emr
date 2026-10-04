@@ -42,7 +42,7 @@ export default function PatientChartPage() {
   if (!patient) return <div className="text-center py-12 text-slate-500">Patient not found</div>;
 
   const currentTab = location.pathname.split('/').pop() || '';
-  const basePath = `/patients/${id}`;
+  const basePath = `/app/patients/${id}`;
 
   return (
     <div className="space-y-4">

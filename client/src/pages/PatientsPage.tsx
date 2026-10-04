@@ -147,12 +147,12 @@ export default function PatientsPage() {
                   {patients.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <Link to={`/patients/${p.id}`} className="text-primary-600 hover:underline font-mono text-xs">
+                        <Link to={`/app/patients/${p.id}`} className="text-primary-600 hover:underline font-mono text-xs">
                           {p.mrn}
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <Link to={`/patients/${p.id}`} className="font-medium text-slate-900 hover:text-primary-600">
+                        <Link to={`/app/patients/${p.id}`} className="font-medium text-slate-900 hover:text-primary-600">
                           {p.last_name}, {p.first_name}
                         </Link>
                       </td>
