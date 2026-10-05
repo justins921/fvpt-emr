@@ -517,6 +517,7 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
     const schema = z.object({
       authorization_number: z.string().min(1).max(100).optional().nullable(),
       authorized_visits: z.number().int().positive().optional(),
+      used_visits: z.number().int().min(0).optional(),
       start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notes: z.string().max(2000).optional().nullable(),
@@ -551,6 +552,7 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
     const fieldMap: Record<string, string> = {
       authorization_number: 'authorization_number',
       authorized_visits: 'authorized_visits',
+      used_visits: 'used_visits',
       start_date: 'start_date',
       end_date: 'end_date',
       notes: 'notes',
@@ -564,6 +566,29 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
       if (fieldMap[key]) {
         fields.push(`${fieldMap[key]} = $${idx++}`);
         values.push(value ?? null);
+      }
+    }
+
+    // Auto-transition legacy status on exhaustion when used_visits is edited
+    // directly, mirroring the /increment endpoint. Reverts to 'active' if
+    // visits are corrected back below the authorized count.
+    if (input.used_visits !== undefined && input.status === undefined) {
+      const cur = await query(
+        `SELECT used_visits, authorized_visits, status
+         FROM authorizations WHERE id = $1 AND clinic_id = $2`,
+        [req.params.id, req.auth!.clinicId]
+      );
+      if (cur.rows.length > 0) {
+        const effAuthorized = input.authorized_visits ?? Number(cur.rows[0].authorized_visits);
+        const exhausted = effAuthorized > 0 && input.used_visits >= effAuthorized;
+        const curStatus = cur.rows[0].status;
+        const newStatus = exhausted
+          ? 'exhausted'
+          : curStatus === 'exhausted' ? 'active' : undefined;
+        if (newStatus && newStatus !== curStatus) {
+          fields.push(`status = $${idx++}`);
+          values.push(newStatus);
+        }
       }
     }
 

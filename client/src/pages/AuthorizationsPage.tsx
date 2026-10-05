@@ -47,7 +47,7 @@ function unwrap(res: any) {
 }
 
 function urgencyColor(auth: any): string {
-  const remaining = (auth.visits_authorized || 0) - (auth.visits_used || 0);
+  const remaining = (auth.authorized_visits || 0) - (auth.used_visits || 0);
   const daysLeft = auth.end_date ? Math.ceil((new Date(auth.end_date).getTime() - Date.now()) / 86400000) : 999;
   if (auth.status === 'expired' || auth.status === 'denied') return 'border-l-4 border-l-red-500';
   if (remaining <= 2 || daysLeft <= 7) return 'border-l-4 border-l-red-400';
@@ -109,7 +109,7 @@ export default function AuthorizationsPage() {
     setForm({
       patient_id: a.patient_id || '', insurance_id: a.insurance_id || '',
       auth_number: a.authorization_number || '', service_type: a.service_type || 'PT',
-      visits_authorized: String(a.authorized_visits ?? a.visits_authorized ?? ''), visits_used: String(a.visits_used || 0),
+      visits_authorized: String(a.authorized_visits ?? a.visits_authorized ?? ''), visits_used: String(a.used_visits ?? 0),
       start_date: a.start_date?.substring(0, 10) || '', end_date: a.end_date?.substring(0, 10) || '',
       status: a.workflow_status || a.status || 'draft', notes: a.notes || '',
       follow_up_date: a.follow_up_date?.substring(0, 10) || '', denial_reason: a.denial_reason || '',
@@ -189,6 +189,9 @@ export default function AuthorizationsPage() {
     if (editing) {
       payload.workflow_status = form.status;
       delete payload.status;
+      const used = Number(form.visits_used);
+      if (!Number.isInteger(used) || used < 0) { setError('Visits used must be a whole number of 0 or more.'); return; }
+      payload.used_visits = used;
       if (form.follow_up_date) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(form.follow_up_date)) {
           setError('Follow-up date must be in YYYY-MM-DD format.');
@@ -228,7 +231,7 @@ export default function AuthorizationsPage() {
   // Compute alerts
   const alerts = auths.filter(a => {
     if (a.status !== 'active') return false;
-    const remaining = (a.visits_authorized || 0) - (a.visits_used || 0);
+    const remaining = (a.authorized_visits || 0) - (a.used_visits || 0);
     const daysLeft = a.end_date ? Math.ceil((new Date(a.end_date).getTime() - Date.now()) / 86400000) : 999;
     return remaining <= 3 || daysLeft <= 14;
   });
@@ -282,7 +285,7 @@ export default function AuthorizationsPage() {
           <h3 className="font-semibold text-amber-800 mb-2">Alerts ({alerts.length})</h3>
           <div className="space-y-1">
             {alerts.map((a: any) => {
-              const remaining = (a.visits_authorized || 0) - (a.visits_used || 0);
+              const remaining = (a.authorized_visits || 0) - (a.used_visits || 0);
               const daysLeft = a.end_date ? Math.ceil((new Date(a.end_date).getTime() - Date.now()) / 86400000) : null;
               return (
                 <div key={a.id} className="text-sm flex justify-between items-center">
@@ -331,7 +334,7 @@ export default function AuthorizationsPage() {
             </select>
           </div>
           <div><label className="label">Visits Authorized *</label><input type="number" min="1" value={form.visits_authorized} onChange={e => set('visits_authorized', e.target.value)} required className="input" /></div>
-          <div><label className="label">Visits Used</label><input type="number" min="0" value={form.visits_used} onChange={e => set('visits_used', e.target.value)} className="input" /></div>
+          {editing && (<div><label className="label">Visits Used</label><input type="number" min="0" value={form.visits_used} onChange={e => set('visits_used', e.target.value)} className="input" /></div>)}
           <div><label className="label">Start Date *</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} required className="input" /></div>
           <div><label className="label">End Date *</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} required className="input" /></div>
           <div>
@@ -447,6 +450,14 @@ export default function AuthorizationsPage() {
 
 // ── Authorization Packet (print-friendly modal) ──
 
+function patientName(patient: any, auth: any): string {
+  const p = patient || {};
+  const last = p.last_name || auth?.patient_last_name || '';
+  const first = p.first_name || auth?.patient_first_name || '';
+  if (!last && !first) return p.patient_name || '-';
+  return `${last}${last && first ? ', ' : ''}${first}`;
+}
+
 function PacketModal({ auth, packet, onClose }: { auth: any; packet: any; onClose: () => void }) {
   const p = packet || {};
   const patient = p.patient || {};
@@ -494,7 +505,7 @@ function PacketModal({ auth, packet, onClose }: { auth: any; packet: any; onClos
         <div className="px-6 py-5">
           <PacketSection title="Patient">
             <dl>
-              <Row label="Name" value={`${patient.last_name || ''}, ${patient.first_name || ''}`.replace(/^, $/, '-')} />
+              <Row label="Name" value={patientName(patient, auth)} />
               <Row label="DOB" value={patient.date_of_birth ? fmtDateOnly(patient.date_of_birth) : undefined} />
               <Row label="MRN" value={patient.mrn} />
               <Row label="Phone" value={patient.phone} />
@@ -509,11 +520,11 @@ function PacketModal({ auth, packet, onClose }: { auth: any; packet: any; onClos
           </PacketSection>
           <PacketSection title="Authorization">
             <dl>
-              <Row label="Auth Number" value={authorization.auth_number} />
+              <Row label="Auth Number" value={authorization.authorization_number || authorization.auth_number} />
               <Row label="Service Type" value={authorization.service_type} />
-              <Row label="Status" value={authorization.status} />
-              <Row label="Visits Authorized" value={authorization.visits_authorized} />
-              <Row label="Visits Used" value={authorization.visits_used} />
+              <Row label="Status" value={authorization.workflow_status || authorization.status} />
+              <Row label="Visits Authorized" value={authorization.authorized_visits ?? authorization.visits_authorized} />
+              <Row label="Visits Used" value={authorization.used_visits ?? authorization.visits_used} />
               <Row label="Start Date" value={authorization.start_date ? fmtDateOnly(authorization.start_date) : undefined} />
               <Row label="End Date" value={authorization.end_date ? fmtDateOnly(authorization.end_date) : undefined} />
               <Row label="Follow-up Date" value={authorization.follow_up_date ? fmtDateOnly(authorization.follow_up_date) : undefined} />

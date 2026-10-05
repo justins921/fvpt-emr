@@ -109,6 +109,7 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
       `SELECT authorization_number, authorized_visits, used_visits, end_date, workflow_status, status
        FROM authorizations
        WHERE clinic_id = $1 AND patient_id = $2
+         AND status != 'exhausted'
          AND (workflow_status = 'approved' OR (workflow_status = 'draft' AND status = 'active'))`,
       [req.auth!.clinicId, input.patientId]
     );
