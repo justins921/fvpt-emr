@@ -104,27 +104,31 @@ export default function PatientChartPage() {
 
 function PatientOverview({ patient }: { patient: PatientData }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="card">
-        <h3 className="font-semibold mb-3">Demographics</h3>
-        <dl className="space-y-2 text-sm">
-          <InfoRow label="Phone" value={patient.phone} />
-          <InfoRow label="Email" value={patient.email} />
-          <InfoRow label="Address" value={[patient.address_line1, patient.city, patient.state, patient.zip].filter(Boolean).join(', ')} />
-          <InfoRow label="Emergency Contact" value={patient.emergency_contact_name} />
-          <InfoRow label="Emergency Phone" value={patient.emergency_contact_phone} />
-        </dl>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card">
+          <h3 className="font-semibold mb-3">Demographics</h3>
+          <dl className="space-y-2 text-sm">
+            <InfoRow label="Phone" value={patient.phone} />
+            <InfoRow label="Email" value={patient.email} />
+            <InfoRow label="Address" value={[patient.address_line1, patient.city, patient.state, patient.zip].filter(Boolean).join(', ')} />
+            <InfoRow label="Emergency Contact" value={patient.emergency_contact_name} />
+            <InfoRow label="Emergency Phone" value={patient.emergency_contact_phone} />
+          </dl>
+        </div>
+        <div className="card">
+          <h3 className="font-semibold mb-3">Clinical</h3>
+          <dl className="space-y-2 text-sm">
+            <InfoRow label="Primary Dx" value={patient.primary_diagnosis_icd10} />
+            <InfoRow label="Secondary Dx" value={patient.secondary_diagnoses_icd10?.join(', ')} />
+            <InfoRow label="Precautions" value={patient.precautions} />
+            <InfoRow label="Referral Source" value={patient.referral_source} />
+            <InfoRow label="Referring Provider" value={patient.referring_provider} />
+          </dl>
+        </div>
       </div>
-      <div className="card">
-        <h3 className="font-semibold mb-3">Clinical</h3>
-        <dl className="space-y-2 text-sm">
-          <InfoRow label="Primary Dx" value={patient.primary_diagnosis_icd10} />
-          <InfoRow label="Secondary Dx" value={patient.secondary_diagnoses_icd10?.join(', ')} />
-          <InfoRow label="Precautions" value={patient.precautions} />
-          <InfoRow label="Referral Source" value={patient.referral_source} />
-          <InfoRow label="Referring Provider" value={patient.referring_provider} />
-        </dl>
-      </div>
+      <PatientInternalNotes patientId={patient.id} />
+      <PatientCommPrefs patientId={patient.id} />
     </div>
   );
 }
@@ -756,6 +760,333 @@ function PatientAudit({ patientId }: { patientId: string }) {
               <span className="ml-2 text-slate-500 text-xs">IP: {e.ip_address}</span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const NOTE_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'general', label: 'General' },
+  { value: 'scheduling', label: 'Scheduling' },
+  { value: 'billing', label: 'Billing' },
+  { value: 'clinical_alert', label: 'Clinical Alert' },
+];
+
+function categoryLabel(v?: string) {
+  return NOTE_CATEGORIES.find(c => c.value === v)?.label || v || 'General';
+}
+
+/** Staff-only internal notes pinned to the patient chart. Never part of the legal record. */
+function PatientInternalNotes({ patientId }: { patientId: string }) {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [text, setText] = useState('');
+  const [category, setCategory] = useState('general');
+  const [isPinned, setIsPinned] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [confirmDeactivateId, setConfirmDeactivateId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+  const role = user?.role || '';
+  const canCreate = ['owner', 'admin', 'dev', 'therapist', 'front_desk', 'biller'].includes(role);
+  const canManage = ['owner', 'admin', 'dev', 'therapist', 'front_desk'].includes(role);
+
+  useEffect(() => { loadNotes(); }, [patientId]);
+
+  async function loadNotes() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get<any>(`/patients/${patientId}/notes`);
+      setNotes(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load notes');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      await api.post(`/patients/${patientId}/notes`, { noteText: text.trim(), category, isPinned });
+      setText(''); setCategory('general'); setIsPinned(false); setShowForm(false);
+      loadNotes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save note');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(n: any) {
+    setEditingId(n.id);
+    setEditText(n.note_text);
+  }
+
+  async function handleEditSave(n: any) {
+    if (!editText.trim()) return;
+    setSaving(true);
+    try {
+      await api.put(`/patients/${patientId}/notes/${n.id}`, { noteText: editText.trim() });
+      setEditingId(null);
+      loadNotes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update note');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function togglePin(n: any) {
+    try {
+      await api.put(`/patients/${patientId}/notes/${n.id}`, { isPinned: !n.is_pinned });
+      loadNotes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update note');
+    }
+  }
+
+  async function handleDeactivate(noteId: string) {
+    // Inline two-click confirm (no native dialog — reliable across browsers)
+    if (confirmDeactivateId !== noteId) { setConfirmDeactivateId(noteId); return; }
+    setConfirmDeactivateId(null);
+    try {
+      await api.post(`/patients/${patientId}/notes/${noteId}/deactivate`);
+      loadNotes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove note');
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold">Internal Notes <span className="text-xs font-normal text-slate-400">(staff only)</span></h3>
+        {canCreate && !showForm && (
+          <button type="button" onClick={() => setShowForm(true)} className="btn-secondary text-sm">+ Add Note</button>
+        )}
+      </div>
+      {error && <div className="text-sm text-red-600 mb-2" role="alert">{error}</div>}
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="mb-4 p-3 bg-slate-50 rounded-lg space-y-3">
+          <div>
+            <label className="label">Note</label>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              required
+              rows={3}
+              maxLength={5000}
+              className="input"
+              placeholder="e.g. Prefers morning appointments; call spouse for billing questions"
+            />
+          </div>
+          <div className="flex flex-wrap gap-4 items-center">
+            <div>
+              <label className="label">Category</label>
+              <select value={category} onChange={e => setCategory(e.target.value)} className="input">
+                {NOTE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm mt-5">
+              <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} />
+              Pin to top
+            </label>
+            <div className="flex gap-2 ml-auto mt-5">
+              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary text-sm">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary text-sm">{saving ? 'Saving…' : 'Save Note'}</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div></div>
+      ) : notes.length === 0 ? (
+        <p className="text-slate-500 text-sm py-3">No internal notes for this patient.</p>
+      ) : (
+        <div className="space-y-3">
+          {notes.map(n => (
+            <div key={n.id} className={`p-3 rounded-lg border ${n.is_pinned ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+              <div className="flex items-start gap-2">
+                {n.is_pinned && <span className="text-amber-500" title="Pinned">📌</span>}
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-1">
+                    <span className="badge-gray">{categoryLabel(n.category)}</span>
+                    <span>{n.author_first} {n.author_last}</span>
+                    <span>{new Date(n.created_at).toLocaleString()}</span>
+                  </div>
+                  {editingId === n.id ? (
+                    <div className="space-y-2">
+                      <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3} maxLength={5000} className="input text-sm" />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => handleEditSave(n)} disabled={saving} className="btn-primary text-xs">Save</button>
+                        <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-500 underline">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.note_text}</p>
+                  )}
+                </div>
+              </div>
+              {canManage && editingId !== n.id && (
+                <div className="mt-2 flex gap-3 items-center text-xs">
+                  <button type="button" onClick={() => startEdit(n)} className="text-slate-500 underline">Edit</button>
+                  <button type="button" onClick={() => togglePin(n)} className="text-slate-500 underline">
+                    {n.is_pinned ? 'Unpin' : 'Pin'}
+                  </button>
+                  {confirmDeactivateId === n.id ? (
+                    <span className="flex items-center gap-2 text-slate-600" aria-live="polite">
+                      Remove this note?
+                      <button type="button" onClick={() => handleDeactivate(n.id)} className="text-xs font-medium text-red-600 underline">Confirm</button>
+                      <button type="button" onClick={() => setConfirmDeactivateId(null)} className="text-slate-500 underline">Back</button>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => handleDeactivate(n.id)} className="text-slate-500 underline">Remove</button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function sourceLabel(s?: string | null) {
+  switch (s) {
+    case 'intake': return 'Intake';
+    case 'front-desk': return 'Front desk';
+    case 'staff': return 'Staff';
+    case 'stop-keyword': return 'STOP keyword';
+    case 'start-keyword': return 'START keyword';
+    case 'migration-default': return 'Default';
+    default: return s || '—';
+  }
+}
+
+function fmtTs(ts?: string | null) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString();
+}
+
+/** Per-patient SMS/email consent: status, staff controls, and change history. */
+function PatientCommPrefs({ patientId }: { patientId: string }) {
+  const [prefs, setPrefs] = useState<any | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [confirmOptOut, setConfirmOptOut] = useState<'sms' | 'email' | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+  const canManage = ['owner', 'admin', 'dev', 'therapist', 'front_desk'].includes(user?.role || '');
+
+  useEffect(() => { loadPrefs(); }, [patientId]);
+
+  async function loadPrefs() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get<any>(`/patients/${patientId}/consent`);
+      setPrefs(res.data?.prefs || null);
+      setHistory(res.data?.history || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load preferences');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function setOpt(channel: 'sms' | 'email', optIn: boolean) {
+    // Inline two-click confirm for opt-outs (no native dialog)
+    if (!optIn && confirmOptOut !== channel) { setConfirmOptOut(channel); return; }
+    setConfirmOptOut(null);
+    setSaving(true);
+    try {
+      await api.post(`/patients/${patientId}/consent`, { channel, optIn, source: 'front-desk' });
+      loadPrefs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update preference');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function channelRow(channel: 'sms' | 'email', label: string) {
+    const optedIn = channel === 'sms' ? prefs?.sms_opt_in !== false : prefs?.email_opt_in !== false;
+    const at = channel === 'sms' ? prefs?.sms_opt_in_at : prefs?.email_opt_in_at;
+    const src = channel === 'sms' ? prefs?.sms_opt_in_source : prefs?.email_opt_in_source;
+    return (
+      <div className="flex flex-wrap items-center gap-3 py-2">
+        <div className="w-24 font-medium text-sm">{label}</div>
+        <span className={`badge ${optedIn ? 'badge-green' : 'badge-red'}`}>{optedIn ? 'Opted in' : 'Opted out'}</span>
+        <span className="text-xs text-slate-500">Since {fmtTs(at)} · {sourceLabel(src)}</span>
+        {canManage && (
+          <div className="ml-auto flex items-center gap-2 text-xs">
+            {optedIn ? (
+              confirmOptOut === channel ? (
+                <span className="flex items-center gap-2 text-slate-600" aria-live="polite">
+                  Opt {label.toLowerCase()} out? No messages will be sent.
+                  <button type="button" onClick={() => setOpt(channel, false)} disabled={saving} className="font-medium text-red-600 underline">Confirm opt-out</button>
+                  <button type="button" onClick={() => setConfirmOptOut(null)} className="text-slate-500 underline">Back</button>
+                </span>
+              ) : (
+                <button type="button" onClick={() => setOpt(channel, false)} className="text-slate-500 underline">Opt out</button>
+              )
+            ) : (
+              <button type="button" onClick={() => setOpt(channel, true)} disabled={saving} className="font-medium text-primary-600 underline">Opt in</button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold">Communication Preferences</h3>
+        {history.length > 0 && (
+          <button type="button" onClick={() => setShowHistory(!showHistory)} className="text-xs text-slate-500 underline">
+            {showHistory ? 'Hide history' : `History (${history.length})`}
+          </button>
+        )}
+      </div>
+      {error && <div className="text-sm text-red-600 mb-2" role="alert">{error}</div>}
+      {loading ? (
+        <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div></div>
+      ) : !prefs ? (
+        <p className="text-slate-500 text-sm py-3">Preferences unavailable.</p>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {channelRow('sms', 'Text (SMS)')}
+          {channelRow('email', 'Email')}
+        </div>
+      )}
+      {showHistory && history.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-200">
+          <h4 className="text-xs font-medium text-slate-500 mb-2">Consent history</h4>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {history.map((h: any) => (
+              <div key={h.id} className="text-xs text-slate-600 flex flex-wrap gap-x-2">
+                <span className="text-slate-400">{fmtTs(h.changed_at)}</span>
+                <span className="uppercase font-medium">{h.channel}</span>
+                <span>{h.old_value === null ? '—' : (h.old_value ? 'in' : 'out')} → {h.new_value ? 'in' : 'out'}</span>
+                <span className="text-slate-400">via {sourceLabel(h.source)}</span>
+                {h.changed_by_first && <span className="text-slate-400">by {h.changed_by_first} {h.changed_by_last}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

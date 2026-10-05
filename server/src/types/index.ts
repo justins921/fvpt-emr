@@ -162,6 +162,15 @@ export enum Permission {
   // Authorizations
   AUTHORIZATION_VIEW = 'authorization:view',
   AUTHORIZATION_MANAGE = 'authorization:manage',
+
+  // Internal patient notes (staff-only, not part of the clinical record)
+  PATIENT_NOTE_VIEW = 'patient_note:view',
+  PATIENT_NOTE_CREATE = 'patient_note:create',
+  PATIENT_NOTE_MANAGE = 'patient_note:manage',
+
+  // Communication consent (SMS/email opt in/out)
+  CONSENT_VIEW = 'consent:view',
+  CONSENT_MANAGE = 'consent:manage',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -218,6 +227,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.NOTE_TEMPLATE_VIEW,
     Permission.NOTE_TEMPLATE_MANAGE,
     Permission.AUTHORIZATION_VIEW,
+    Permission.PATIENT_NOTE_VIEW,
+    Permission.PATIENT_NOTE_CREATE,
+    Permission.PATIENT_NOTE_MANAGE,
+    Permission.CONSENT_VIEW,
+    Permission.CONSENT_MANAGE,
   ],
   [Role.FRONT_DESK]: [
     Permission.CLINIC_VIEW,
@@ -251,6 +265,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REFERRING_PROVIDER_VIEW,
     Permission.AUTHORIZATION_VIEW,
     Permission.AUTHORIZATION_MANAGE,
+    Permission.PATIENT_NOTE_VIEW,
+    Permission.PATIENT_NOTE_CREATE,
+    Permission.PATIENT_NOTE_MANAGE,
+    Permission.CONSENT_VIEW,
+    Permission.CONSENT_MANAGE,
   ],
   [Role.BILLER]: [
     Permission.CLINIC_VIEW,
@@ -277,6 +296,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REPORT_VIEW,
     Permission.AUTHORIZATION_VIEW,
     Permission.AUTHORIZATION_MANAGE,
+    Permission.PATIENT_NOTE_VIEW,
+    Permission.PATIENT_NOTE_CREATE,
+    Permission.CONSENT_VIEW,
     Permission.WORKERS_COMP_VIEW,
     Permission.WORKERS_COMP_MANAGE,
     Permission.MIPS_VIEW,
@@ -285,6 +307,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.READ_ONLY]: [
     Permission.CLINIC_VIEW,
     Permission.PATIENT_VIEW,
+    Permission.PATIENT_NOTE_VIEW,
+    Permission.CONSENT_VIEW,
     Permission.SCHEDULE_VIEW,
     Permission.NOTE_VIEW,
     Permission.ATTACHMENT_VIEW,
@@ -751,6 +775,15 @@ export enum AuditAction {
   // Authorization
   AUTHORIZATION_CREATE = 'authorization.create',
   AUTHORIZATION_EDIT = 'authorization.edit',
+
+  // Internal patient notes (staff-only)
+  PATIENT_NOTE_CREATE = 'patient_note.create',
+  PATIENT_NOTE_EDIT = 'patient_note.edit',
+  PATIENT_NOTE_DEACTIVATE = 'patient_note.deactivate',
+
+  // Communication consent
+  CONSENT_CHANGE = 'consent.change',
+  CONSENT_SKIP_SEND = 'consent.skip_send',
 }
 
 export interface AuditEvent {

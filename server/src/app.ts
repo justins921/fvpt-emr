@@ -44,6 +44,7 @@ import payerRequirementsRoutes from './routes/payer-requirements';
 import noteUtilRoutes from './routes/note-utils';
 import noteTemplateRoutes from './routes/note-templates';
 import referringProviderRoutes from './routes/referring-providers';
+import patientNoteRoutes from './routes/patient-notes';
 
 const app = express();
 
@@ -128,6 +129,7 @@ app.get('/api/debug/login-check', async (_req, res) => {
 // ── Existing API routes ──
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/patients/:id/notes', patientNoteRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/notes', noteRoutes);

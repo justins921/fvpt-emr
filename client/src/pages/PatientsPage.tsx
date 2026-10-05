@@ -56,6 +56,8 @@ export default function PatientsPage() {
         gender: form.get('gender'),
         phone: form.get('phone') || null,
         email: form.get('email') || null,
+        smsOptIn: form.get('smsOptIn') === 'on',
+        emailOptIn: form.get('emailOptIn') === 'on',
       });
       setShowNewForm(false);
       loadPatients();
@@ -113,6 +115,16 @@ export default function PatientsPage() {
           <div>
             <label className="label">Email</label>
             <input name="email" type="email" className="input" />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="smsOptIn" defaultChecked className="mt-1" />
+              <span>Patient consents to receive <strong>text (SMS)</strong> messages (appointment reminders, etc.)</span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="emailOptIn" defaultChecked className="mt-1" />
+              <span>Patient consents to receive <strong>email</strong> messages</span>
+            </label>
           </div>
           <div className="sm:col-span-2 lg:col-span-3 flex gap-2 justify-end">
             <button type="button" onClick={() => setShowNewForm(false)} className="btn-secondary">Cancel</button>

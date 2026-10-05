@@ -4,6 +4,7 @@ import { authenticate, validateSession, requirePermission, tenantScope } from '.
 import { query } from '../db';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
+import { getConsentPrefs, getConsentHistory, setConsent, ConsentSource } from '../services/consent';
 import { v4 as uuid } from 'uuid';
 
 const router = Router();
@@ -33,6 +34,9 @@ const patientSchema = z.object({
   primaryDiagnosisIcd10: z.string().max(10).optional().nullable(),
   secondaryDiagnosesIcd10: z.array(z.string()).optional(),
   precautions: z.string().optional().nullable(),
+  // Communication consent — explicit at intake (defaults: opted in)
+  smsOptIn: z.boolean().default(true),
+  emailOptIn: z.boolean().default(true),
 });
 
 function generateMRN(): string {
@@ -140,6 +144,54 @@ router.get('/:id/insurance', requirePermission(Permission.PATIENT_VIEW), async (
   }
 });
 
+// Get communication preferences + consent history for a patient
+router.get('/:id/consent', requirePermission(Permission.CONSENT_VIEW), async (req: Request, res: Response) => {
+  try {
+    const prefs = await getConsentPrefs(req.params.id, req.auth!.clinicId);
+    if (!prefs) {
+      res.status(404).json({ success: false, error: 'Patient not found' });
+      return;
+    }
+    const history = await getConsentHistory(req.params.id, req.auth!.clinicId);
+    res.json({ success: true, data: { prefs, history } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+const consentChangeSchema = z.object({
+  channel: z.enum(['sms', 'email']),
+  optIn: z.boolean(),
+  source: z.enum(['front-desk', 'staff']).default('front-desk'),
+});
+
+// Change a patient's communication consent (staff-initiated)
+router.post('/:id/consent', requirePermission(Permission.CONSENT_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const input = consentChangeSchema.parse(req.body);
+    const oldValue = await setConsent({
+      patientId: req.params.id,
+      clinicId: req.auth!.clinicId,
+      channel: input.channel,
+      optIn: input.optIn,
+      source: input.source as ConsentSource,
+      changedBy: req.auth!.userId,
+      req,
+    });
+    if (oldValue === null) {
+      res.status(404).json({ success: false, error: 'Patient not found' });
+      return;
+    }
+    res.json({ success: true, data: { channel: input.channel, oldValue, newValue: input.optIn } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Create patient
 router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Request, res: Response) => {
   try {
@@ -152,8 +204,10 @@ router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Reque
         city, state, zip, emergency_contact_name, emergency_contact_phone,
         guarantor_name, guarantor_phone, guarantor_relationship,
         referral_source, referring_provider, referring_provider_npi,
-        primary_diagnosis_icd10, secondary_diagnoses_icd10, precautions
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+        primary_diagnosis_icd10, secondary_diagnoses_icd10, precautions,
+        sms_opt_in, email_opt_in, sms_opt_in_at, email_opt_in_at,
+        sms_opt_in_source, email_opt_in_source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
       RETURNING id, mrn`,
       [
         req.auth!.clinicId, mrn, input.firstName, input.lastName,
@@ -169,8 +223,20 @@ router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Reque
         input.primaryDiagnosisIcd10 || null,
         input.secondaryDiagnosesIcd10 || [],
         input.precautions || null,
+        input.smsOptIn, input.emailOptIn,
+        new Date().toISOString(), new Date().toISOString(),
+        'intake', 'intake',
       ]
     );
+    // Seed the consent log with the intake choices
+    const newPatientId = result.rows[0].id;
+    for (const [channel, optIn] of [['sms', input.smsOptIn], ['email', input.emailOptIn]] as const) {
+      await query(
+        `INSERT INTO communication_consent_log (clinic_id, patient_id, channel, old_value, new_value, changed_by, source)
+         VALUES ($1, $2, $3, NULL, $4, $5, 'intake')`,
+        [req.auth!.clinicId, newPatientId, channel, optIn, req.auth!.userId]
+      );
+    }
     await logAudit({
       clinicId: req.auth!.clinicId,
       userId: req.auth!.userId,

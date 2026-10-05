@@ -7,6 +7,7 @@ import { config } from '../config';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
 import { sendSms, isSmsConfigured, renderTemplate, normalizePhoneNumber } from '../services/sms';
+import { setConsent, logSkippedSend } from '../services/consent';
 
 const router = Router();
 
@@ -72,10 +73,40 @@ router.post('/webhook/inbound', async (req: Request, res: Response) => {
        FROM patients p
        WHERE REPLACE(REPLACE(REPLACE(REPLACE(p.phone, '-', ''), '(', ''), ')', ''), ' ', '')
              LIKE '%' || $1
-       AND p.is_active = true
-       LIMIT 1`,
+       AND p.is_active = true`,
       [normalized.replace('+1', '')]
     );
+
+    // ── Consent keyword handling (case-insensitive, trimmed) ──
+    const keyword = String(Body).trim().toUpperCase();
+    const OPT_OUT_KEYWORDS = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'QUIT', 'CANCEL', 'END'];
+    const OPT_IN_KEYWORDS = ['START', 'YES', 'UNSTOP'];
+
+    if (result.rows.length > 0 && (OPT_OUT_KEYWORDS.includes(keyword) || OPT_IN_KEYWORDS.includes(keyword))) {
+      const optIn = OPT_IN_KEYWORDS.includes(keyword);
+      const source = optIn ? 'start-keyword' : 'stop-keyword';
+      for (const patient of result.rows) {
+        await setConsent({
+          patientId: patient.patient_id,
+          clinicId: patient.clinic_id,
+          channel: 'sms',
+          optIn,
+          source,
+          changedBy: null, // patient-initiated via SMS keyword
+        });
+      }
+      const reply = optIn
+        ? 'You are now opted in to text messages. Reply STOP to opt out at any time.'
+        : 'You have been unsubscribed from text messages and will no longer receive them. Reply START to opt back in.';
+      res.status(200).type('text/xml').send(`<Response><Message>${reply}</Message></Response>`);
+      return;
+    }
+
+    if (result.rows.length > 0 && keyword === 'HELP') {
+      const reply = 'Reply STOP to stop text messages, START to resume them. For help call your clinic directly.';
+      res.status(200).type('text/xml').send(`<Response><Message>${reply}</Message></Response>`);
+      return;
+    }
 
     if (result.rows.length > 0) {
       const patient = result.rows[0];
@@ -156,7 +187,7 @@ router.get('/cron/daily-reminders', async (req: Request, res: Response) => {
       const templateBody = tmpl.rows[0]?.body || DEFAULT_REMINDER_TEMPLATE;
 
       const appts = await query(
-        `SELECT DISTINCT p.id, p.first_name, p.last_name, p.phone, a.start_time
+        `SELECT DISTINCT p.id, p.first_name, p.last_name, p.phone, p.sms_opt_in, a.start_time
          FROM appointments a
          JOIN patients p ON a.patient_id = p.id
          WHERE a.clinic_id = $1
@@ -170,6 +201,18 @@ router.get('/cron/daily-reminders', async (req: Request, res: Response) => {
       );
 
       for (const patient of appts.rows) {
+        // Consent gate: never remind opted-out patients — record the skip
+        if (patient.sms_opt_in === false) {
+          await query(
+            `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, to_number)
+             VALUES ($1, $2, 'outbound', $3, 'skipped', 'reminder', $4)`,
+            [clinic.id, patient.id, '[skipped — patient opted out of SMS]', patient.phone || null]
+          );
+          await logSkippedSend(clinic.id, null, patient.id, 'sms', 'Daily reminder skipped — patient opted out');
+          totalSkipped++;
+          continue;
+        }
+
         // Idempotency: skip patients already reminded in the last 20 hours
         const dup = await query(
           `SELECT 1 FROM sms_messages
@@ -336,9 +379,9 @@ router.post('/send', requirePermission(Permission.MESSAGING_SEND), async (req: R
     const clinicId = req.auth!.clinicId;
     const userId = req.auth!.userId;
 
-    // Get patient phone
+    // Get patient phone + SMS consent
     const patientResult = await query(
-      `SELECT id, phone, first_name, last_name FROM patients WHERE id = $1 AND clinic_id = $2`,
+      `SELECT id, phone, first_name, last_name, sms_opt_in FROM patients WHERE id = $1 AND clinic_id = $2`,
       [input.patientId, clinicId]
     );
     if (patientResult.rows.length === 0) {
@@ -347,6 +390,24 @@ router.post('/send', requirePermission(Permission.MESSAGING_SEND), async (req: R
     }
 
     const patient = patientResult.rows[0];
+
+    // Consent gate: never send SMS to an opted-out patient
+    if (patient.sms_opt_in === false) {
+      const msgResult = await query(
+        `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, sent_by, to_number)
+         VALUES ($1, $2, 'outbound', $3, 'skipped', $4, $5, $6)
+         RETURNING *`,
+        [clinicId, input.patientId, input.body, input.messageType, userId, patient.phone || null]
+      );
+      await logSkippedSend(clinicId, userId, input.patientId, 'sms', 'Patient opted out of SMS', req);
+      res.status(403).json({
+        success: false,
+        error: 'Patient has opted out of SMS messages. Re-enable consent on the patient record first.',
+        data: { message: msgResult.rows[0] },
+      });
+      return;
+    }
+
     if (!patient.phone) {
       res.status(400).json({ success: false, error: 'Patient has no phone number on file' });
       return;
@@ -460,7 +521,7 @@ router.post('/send-bulk', requirePermission(Permission.MESSAGING_MANAGE), async 
       const dayAfterStr = dayAfter.toISOString().substring(0, 10);
 
       const result = await query(
-        `SELECT DISTINCT p.id, p.first_name, p.last_name, p.phone,
+        `SELECT DISTINCT p.id, p.first_name, p.last_name, p.phone, p.sms_opt_in,
                 a.start_time
          FROM appointments a
          JOIN patients p ON a.patient_id = p.id
@@ -481,7 +542,7 @@ router.post('/send-bulk', requirePermission(Permission.MESSAGING_MANAGE), async 
       const day = String(today.getDate()).padStart(2, '0');
 
       const result = await query(
-        `SELECT id, first_name, last_name, phone, date_of_birth
+        `SELECT id, first_name, last_name, phone, date_of_birth, sms_opt_in
          FROM patients
          WHERE clinic_id = $1
            AND EXTRACT(MONTH FROM date_of_birth) = $2
@@ -495,10 +556,23 @@ router.post('/send-bulk', requirePermission(Permission.MESSAGING_MANAGE), async 
 
     let sent = 0;
     let failed = 0;
+    let skippedConsent = 0;
     const errors: string[] = [];
 
     await transaction(async (client) => {
       for (const patient of patients) {
+        // Consent gate: skip opted-out patients, record the skip
+        if (patient.sms_opt_in === false) {
+          await client.query(
+            `INSERT INTO sms_messages (clinic_id, patient_id, direction, body, status, message_type, sent_by, to_number)
+             VALUES ($1, $2, 'outbound', $3, 'skipped', $4, $5, $6)`,
+            [clinicId, patient.id, '[skipped — patient opted out of SMS]', input.type === 'reminder' ? 'reminder' : 'birthday', userId, patient.phone || null]
+          );
+          await logSkippedSend(clinicId, userId, patient.id, 'sms', 'Bulk send skipped — patient opted out', req);
+          skippedConsent++;
+          continue;
+        }
+
         const normalizedPhone = normalizePhoneNumber(patient.phone);
         if (!normalizedPhone) {
           failed++;
@@ -544,7 +618,7 @@ router.post('/send-bulk', requirePermission(Permission.MESSAGING_MANAGE), async 
       clinicId,
       userId,
       action: AuditAction.SMS_BULK_SEND,
-      details: { type: input.type, total: patients.length, sent, failed },
+      details: { type: input.type, total: patients.length, sent, failed, skippedConsent },
       req,
     });
 
@@ -554,6 +628,7 @@ router.post('/send-bulk', requirePermission(Permission.MESSAGING_MANAGE), async 
         total: patients.length,
         sent,
         failed,
+        skippedConsent,
         errors: errors.slice(0, 10),
         smsConfigured: isSmsConfigured(),
       },

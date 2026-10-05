@@ -28,6 +28,8 @@ async function run() {
       { name: '011_exercise_clinic_overrides', module: await import('./011_exercise_clinic_overrides') },
       { name: '012_backfill_exercise_images', module: await import('./012_backfill_exercise_images') },
       { name: '013_preauth_billing', module: await import('./013_preauth_billing') },
+      { name: '014_patient_notes', module: await import('./014_patient_notes') },
+      { name: '015_communication_consent', module: await import('./015_communication_consent') },
     ];
 
     if (direction === 'up') {
