@@ -137,10 +137,16 @@ export default function SchedulePage() {
     try {
       const locationId = fd.get('locationId') as string;
       // Interpret the entered date/time as clinic-local (browser-local) and convert
-      // to UTC for storage. The old code appended 'Z' to a local wall-clock time,
-      // shifting appointments by the UTC offset (e.g. 9:00 AM CDT stored as 4:00 AM).
-      const startLocal = new Date(`${date}T${startTime}:00`);
-      const endLocal = new Date(`${date}T${endTime}:00`);
+      // to UTC for storage. NOTE: `new Date('YYYY-MM-DDT HH:MM:SS')` (no offset)
+      // parses as UTC per ECMA-262 — NOT local time — so we must use the numeric
+      // Date constructor, which is local. The string form shifted appointments by
+      // the UTC offset (e.g. 9:00 AM CDT stored as 09:00Z, displayed as 4:00 AM,
+      // and invisible on the 7 AM–6 PM grids).
+      const [cy, cmo, cd] = date.split('-').map(Number);
+      const [sh, sm] = startTime.split(':').map(Number);
+      const [eh, em] = endTime.split(':').map(Number);
+      const startLocal = new Date(cy, cmo - 1, cd, sh, sm, 0);
+      const endLocal = new Date(cy, cmo - 1, cd, eh, em, 0);
       if (isNaN(startLocal.getTime()) || isNaN(endLocal.getTime())) {
         setCreateError('Please enter valid start and end times.');
         return;

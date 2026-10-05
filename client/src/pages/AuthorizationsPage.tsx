@@ -19,7 +19,7 @@ function fmtDateOnly(s: string | null | undefined): string {
 
 const EMPTY_AUTH = {
   patient_id: '', insurance_id: '', auth_number: '', service_type: 'PT',
-  visits_authorized: '', visits_used: '0', start_date: '', end_date: '', status: 'active', notes: '',
+  visits_authorized: '', visits_used: '0', start_date: '', end_date: '', status: 'draft', notes: '',
   follow_up_date: '', denial_reason: '',
 };
 
@@ -180,6 +180,10 @@ export default function AuthorizationsPage() {
       start_date: form.start_date,
       end_date: form.end_date,
       notes: form.notes.trim() || null,
+      // The create form's Status dropdown maps to the workflow column
+      workflow_status: ['draft', 'submitted', 'pending', 'approved', 'denied', 'expired'].includes(form.status)
+        ? form.status
+        : 'draft',
     };
     // Edit mode supports the wider update schema — status maps to the workflow column
     if (editing) {

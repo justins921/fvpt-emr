@@ -37,7 +37,9 @@ router.get('/', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Re
     }
 
     if (needs_followup === 'true') {
-      conditions.push(`a.status = 'pending'`);
+      // workflow_status is the source of truth; fall back to the legacy status
+      // column for rows created before migration 013.
+      conditions.push(`(a.workflow_status IN ('pending','submitted') OR a.status = 'pending')`);
       conditions.push(`a.follow_up_date IS NOT NULL`);
       conditions.push(`a.follow_up_date <= CURRENT_DATE`);
     }
@@ -161,7 +163,7 @@ router.get('/alerts/pending-followups', requirePermission(Permission.AUTHORIZATI
        JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
        LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
        WHERE a.clinic_id = $1
-         AND a.status = 'pending'
+         AND (a.workflow_status IN ('pending','submitted') OR a.status = 'pending')
          AND a.follow_up_date IS NOT NULL
          AND a.follow_up_date <= CURRENT_DATE
        ORDER BY a.follow_up_date ASC`,
@@ -438,6 +440,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
       start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       notes: z.string().max(2000).optional().nullable(),
+      workflow_status: z.enum(['draft', 'submitted', 'pending', 'approved', 'denied', 'expired']).optional(),
     });
     const input = schema.parse(req.body);
 
@@ -468,8 +471,8 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
     }
 
     const result = await query(
-      `INSERT INTO authorizations (clinic_id, patient_id, insurance_id, authorization_number, authorized_visits, used_visits, start_date, end_date, notes, status)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, 'active')
+      `INSERT INTO authorizations (clinic_id, patient_id, insurance_id, authorization_number, authorized_visits, used_visits, start_date, end_date, notes, status, workflow_status)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, 'active', $9)
        RETURNING id`,
       [
         req.auth!.clinicId,
@@ -480,6 +483,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
         input.start_date,
         input.end_date,
         input.notes || null,
+        input.workflow_status || 'draft',
       ]
     );
 

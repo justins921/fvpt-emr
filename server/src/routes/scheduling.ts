@@ -113,7 +113,23 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
       [req.auth!.clinicId, input.patientId]
     );
     if (authResult.rows.length === 0) {
-      authWarnings.push('Patient has no active authorization on file — verify coverage before this visit');
+      // Distinguish "auth exists but is exhausted" from "no auth at all"
+      const exhaustedResult = await query(
+        `SELECT authorization_number, authorized_visits, used_visits
+         FROM authorizations
+         WHERE clinic_id = $1 AND patient_id = $2 AND status = 'exhausted'`,
+        [req.auth!.clinicId, input.patientId]
+      );
+      if (exhaustedResult.rows.length > 0) {
+        for (const ex of exhaustedResult.rows) {
+          const exLabel = ex.authorization_number || 'authorization';
+          authWarnings.push(
+            `Authorization ${exLabel} has 0 visits remaining (${Number(ex.used_visits) || 0}/${Number(ex.authorized_visits) || 0} used) — new authorization required before this visit`
+          );
+        }
+      } else {
+        authWarnings.push('Patient has no active authorization on file — verify coverage before this visit');
+      }
     }
     const apptDate = input.startTime.slice(0, 10); // YYYY-MM-DD
     for (const auth of authResult.rows) {
