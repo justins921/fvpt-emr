@@ -25,6 +25,8 @@ async function run() {
       { name: '008_seed_exercises_and_features', module: await import('./008_seed_exercises_and_features') },
       { name: '009_fix_hep_schema', module: await import('./009_fix_hep_schema') },
       { name: '010_add_note_templates', module: await import('./010_add_note_templates') },
+      { name: '011_exercise_clinic_overrides', module: await import('./011_exercise_clinic_overrides') },
+      { name: '012_backfill_exercise_images', module: await import('./012_backfill_exercise_images') },
     ];
 
     if (direction === 'up') {

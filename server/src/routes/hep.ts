@@ -712,41 +712,52 @@ router.get('/', requirePermission(Permission.HEP_VIEW), async (req: Request, res
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * limitNum;
 
-    let whereClause = '(clinic_id = $1 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true';
+    let whereClause = '(e.clinic_id = $1 OR (e.is_global = true AND e.clinic_id IS NULL)) AND e.is_active = true';
     const params: unknown[] = [req.auth!.clinicId];
 
     if (search) {
-      whereClause += ` AND (
-        LOWER(name) LIKE LOWER($${params.length + 1}) OR
-        LOWER(description) LIKE LOWER($${params.length + 1}) OR
-        LOWER(instructions) LIKE LOWER($${params.length + 1})
-      )`;
-      params.push(`%${search}%`);
+      whereClause += ' AND (\n' +
+        '        LOWER(COALESCE(o.custom_name, e.name)) LIKE LOWER($' + (params.length + 1) + ') OR\n' +
+        '        LOWER(e.description) LIKE LOWER($' + (params.length + 1) + ') OR\n' +
+        '        LOWER(e.instructions) LIKE LOWER($' + (params.length + 1) + ')\n' +
+        '      )';
+      params.push('%' + search + '%');
     }
 
     if (body_region) {
-      whereClause += ` AND body_region = $${params.length + 1}`;
+      whereClause += ' AND e.body_region = $' + (params.length + 1);
       params.push(body_region);
     }
 
     if (category) {
-      whereClause += ` AND category = $${params.length + 1}`;
+      whereClause += ' AND e.category = $' + (params.length + 1);
       params.push(category);
     }
 
     const countResult = await query(
-      `SELECT COUNT(*) as total FROM exercises WHERE ${whereClause}`,
+      'SELECT COUNT(*) as total FROM exercises e ' +
+      'LEFT JOIN exercise_clinic_overrides o ON o.exercise_id = e.id AND o.clinic_id = $1 ' +
+      'WHERE ' + whereClause,
       params
     );
 
     const result = await query(
-      `SELECT id, name, description, body_region, category, difficulty, instructions,
-              default_sets, default_reps, default_hold_seconds, default_duration_minutes,
-              video_url, image_url, tags, created_at
-       FROM exercises
-       WHERE ${whereClause}
-       ORDER BY name
-       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      'SELECT e.id, ' +
+      'COALESCE(o.custom_name, e.name) as name, ' +
+      'e.name as base_name, ' +
+      'COALESCE(o.custom_description, e.description) as description, ' +
+      'e.body_region, e.category, e.difficulty, ' +
+      'COALESCE(o.custom_instructions, e.instructions) as instructions, ' +
+      'e.default_sets, e.default_reps, e.default_hold_seconds, e.default_duration_minutes, ' +
+      'e.video_url, ' +
+      'COALESCE(o.custom_image_url, e.image_url) as image_url, ' +
+      'e.tags, e.created_at, ' +
+      '(o.id IS NOT NULL) as is_customized ' +
+      'FROM exercises e ' +
+      'LEFT JOIN exercise_clinic_overrides o ON o.exercise_id = e.id AND o.clinic_id = $1 ' +
+      'WHERE ' + whereClause + ' ' +
+      'ORDER BY COALESCE(o.custom_name, e.name) ' +
+      'LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2),
       [...params, limitNum, offset]
     );
 
@@ -807,11 +818,25 @@ router.post('/', requirePermission(Permission.HEP_CREATE), async (req: Request, 
   }
 });
 
-// Get single exercise (own clinic's or global)
+// Get single exercise (own clinic's or global), with clinic overrides applied
 router.get('/:id', requirePermission(Permission.HEP_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT * FROM exercises WHERE id = $1 AND (clinic_id = $2 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true`,
+      'SELECT e.id, ' +
+      'COALESCE(o.custom_name, e.name) as name, ' +
+      'e.name as base_name, ' +
+      'COALESCE(o.custom_description, e.description) as description, ' +
+      'e.body_region, e.category, e.difficulty, ' +
+      'COALESCE(o.custom_instructions, e.instructions) as instructions, ' +
+      'e.default_sets, e.default_reps, e.default_hold_seconds, e.default_duration_minutes, ' +
+      'e.video_url, ' +
+      'COALESCE(o.custom_image_url, e.image_url) as image_url, ' +
+      'e.tags, e.is_global, e.clinic_id, e.is_active, e.created_at, ' +
+      '(o.id IS NOT NULL) as is_customized, ' +
+      'o.custom_name, o.custom_description, o.custom_instructions, o.custom_image_url ' +
+      'FROM exercises e ' +
+      'LEFT JOIN exercise_clinic_overrides o ON o.exercise_id = e.id AND o.clinic_id = $2 ' +
+      'WHERE e.id = $1 AND (e.clinic_id = $2 OR (e.is_global = true AND e.clinic_id IS NULL)) AND e.is_active = true',
       [req.params.id, req.auth!.clinicId]
     );
     if (result.rows.length === 0) {
@@ -819,6 +844,98 @@ router.get('/:id', requirePermission(Permission.HEP_VIEW), async (req: Request, 
       return;
     }
     res.json({ success: true, data: result.rows[0] });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+const overrideSchema = z.object({
+  customName: z.string().min(1).max(255).optional().nullable(),
+  customDescription: z.string().optional().nullable(),
+  customInstructions: z.string().optional().nullable(),
+  customImageUrl: z.string().url().optional().nullable(),
+});
+
+// Upsert per-clinic override (rename / re-image / re-describe a shared exercise)
+router.put('/:id/override', requirePermission(Permission.HEP_EDIT), async (req: Request, res: Response) => {
+  try {
+    const input = overrideSchema.parse(req.body);
+    const clinicId = req.auth!.clinicId;
+
+    // Exercise must be visible to this clinic (own or global)
+    const exCheck = await query(
+      'SELECT id FROM exercises WHERE id = $1 AND (clinic_id = $2 OR (is_global = true AND clinic_id IS NULL)) AND is_active = true',
+      [req.params.id, clinicId]
+    );
+    if (exCheck.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Exercise not found' });
+      return;
+    }
+
+    const hasValue =
+      (input.customName ?? null) !== null ||
+      (input.customDescription ?? null) !== null ||
+      (input.customInstructions ?? null) !== null ||
+      (input.customImageUrl ?? null) !== null;
+    if (!hasValue) {
+      res.status(400).json({ success: false, error: 'No override values provided' });
+      return;
+    }
+
+    await query(
+      'INSERT INTO exercise_clinic_overrides (clinic_id, exercise_id, custom_name, custom_description, custom_instructions, custom_image_url, created_by) ' +
+      'VALUES ($1,$2,$3,$4,$5,$6,$7) ' +
+      'ON CONFLICT (clinic_id, exercise_id) DO UPDATE SET ' +
+      'custom_name = EXCLUDED.custom_name, ' +
+      'custom_description = EXCLUDED.custom_description, ' +
+      'custom_instructions = EXCLUDED.custom_instructions, ' +
+      'custom_image_url = EXCLUDED.custom_image_url, ' +
+      'updated_at = NOW()',
+      [
+        clinicId, req.params.id,
+        input.customName || null, input.customDescription || null,
+        input.customInstructions || null, input.customImageUrl || null,
+        req.auth!.userId,
+      ]
+    );
+
+    await logAudit({
+      clinicId, userId: req.auth!.userId,
+      action: AuditAction.HEP_EXERCISE_EDIT,
+      resourceType: 'hep_exercise', resourceId: req.params.id,
+      details: { action: 'override_upsert' },
+      req,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Remove per-clinic override (revert to shared defaults)
+router.delete('/:id/override', requirePermission(Permission.HEP_EDIT), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      'DELETE FROM exercise_clinic_overrides WHERE exercise_id = $1 AND clinic_id = $2 RETURNING id',
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'No override found' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.HEP_EXERCISE_EDIT,
+      resourceType: 'hep_exercise', resourceId: req.params.id,
+      details: { action: 'override_delete' },
+      req,
+    });
+    res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
