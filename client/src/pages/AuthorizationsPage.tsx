@@ -138,11 +138,20 @@ export default function AuthorizationsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSuccess('');
+    // Client-side pre-validation with specific messages (avoids opaque server rejections)
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(form.patient_id)) { setError('Please select a patient.'); return; }
+    if (!uuidRe.test(form.insurance_id)) { setError('Please select an insurance — the list loads after you pick a patient. If it shows "No insurance on file", add the patient\'s insurance first.'); return; }
+    const visits = Number(form.visits_authorized);
+    if (!Number.isInteger(visits) || visits < 1) { setError('Visits authorized must be a whole number of 1 or more.'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.start_date)) { setError('Start date must be a valid date (YYYY-MM-DD).'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.end_date)) { setError('End date must be a valid date (YYYY-MM-DD).'); return; }
+    if (form.end_date <= form.start_date) { setError('End date must be after start date.'); return; }
     const payload: any = {
       patient_id: form.patient_id,
       insurance_id: form.insurance_id,
       authorization_number: form.auth_number.trim() || null,
-      authorized_visits: Number(form.visits_authorized),
+      authorized_visits: visits,
       start_date: form.start_date,
       end_date: form.end_date,
       notes: form.notes.trim() || null,
@@ -506,14 +515,18 @@ function PayerRequirementsSection({ user }: { user: any }) {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    setLoading(true);
+    setLoading(true); setError('');
     try {
       const res = await api.get<any>('/payer-requirements');
-      const d = unwrap(res);
-      // Server returns { success, data: [...] } — unwrap() passes arrays through untouched,
-      // so accept the array directly or under data/items keys.
-      setPayers(Array.isArray(d) ? d : d.data || d.items || []);
-    } catch { setError('Failed to load payer requirements'); } finally { setLoading(false); }
+      // Server returns { success, data: [...], meta } — extract the array robustly
+      const rows = Array.isArray(res) ? res
+        : Array.isArray(res?.data) ? res.data
+        : Array.isArray(res?.items) ? res.items
+        : [];
+      setPayers(rows);
+    } catch (err) {
+      setError(err instanceof ApiError ? `Failed to load payer requirements: ${err.message}` : 'Failed to load payer requirements');
+    } finally { setLoading(false); }
   }
 
   function openCreate() {

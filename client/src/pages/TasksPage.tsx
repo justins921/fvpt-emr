@@ -77,6 +77,7 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [assignedFilter, setAssignedFilter] = useState('');
   const [page, setPage] = useState(1);
 
@@ -166,7 +167,9 @@ export default function TasksPage() {
   }
 
   async function handleCancel(id: string) {
-    if (!confirm('Cancel this task?')) return;
+    // Inline two-click confirm (no native dialog — reliable across browsers and assistive tech)
+    if (confirmCancelId !== id) { setConfirmCancelId(id); return; }
+    setConfirmCancelId(null);
     try {
       await api.delete(`/tasks/${id}`);
       setSuccess('Task cancelled');
@@ -354,8 +357,16 @@ export default function TasksPage() {
               <div className="flex gap-2 flex-shrink-0">
                 {task.status !== 'completed' && task.status !== 'cancelled' && (
                   <>
-                    <button onClick={() => handleComplete(task.id)} className="btn-primary text-xs px-3 py-1">Complete</button>
-                    <button onClick={() => handleCancel(task.id)} className="btn-secondary text-xs px-3 py-1">Cancel</button>
+                    <button type="button" onClick={() => handleComplete(task.id)} className="btn-primary text-xs px-3 py-1">Complete</button>
+                    {confirmCancelId === task.id ? (
+                      <>
+                        <span className="text-xs text-slate-600">Cancel this task?</span>
+                        <button type="button" onClick={() => handleCancel(task.id)} className="btn-secondary text-xs px-3 py-1">Confirm</button>
+                        <button type="button" onClick={() => setConfirmCancelId(null)} className="text-xs text-slate-500 underline">Back</button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => handleCancel(task.id)} className="btn-secondary text-xs px-3 py-1">Cancel</button>
+                    )}
                   </>
                 )}
               </div>

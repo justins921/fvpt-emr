@@ -347,11 +347,11 @@ function PatientNotes({ patientId }: { patientId: string }) {
                 {confirmSignId === note.id ? (
                   <>
                     <span className="text-xs text-slate-600">Sign and finalize? This cannot be undone.</span>
-                    <button onClick={() => signNote(note.id)} className="btn-primary text-xs">Confirm Sign</button>
-                    <button onClick={() => setConfirmSignId(null)} className="text-xs text-slate-500 underline">Cancel</button>
+                    <button type="button" onClick={() => signNote(note.id)} className="btn-primary text-xs">Confirm Sign</button>
+                    <button type="button" onClick={() => setConfirmSignId(null)} className="text-xs text-slate-500 underline">Cancel</button>
                   </>
                 ) : (
-                  <button onClick={() => signNote(note.id)} className="btn-primary text-xs">Sign & Finalize</button>
+                  <button type="button" onClick={() => signNote(note.id)} className="btn-primary text-xs">Sign & Finalize</button>
                 )}
               </div>
             )}
