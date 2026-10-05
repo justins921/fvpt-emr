@@ -64,6 +64,8 @@ export default function SchedulePage() {
   const [mobileProviderId, setMobileProviderId] = useState<string>('all');
   const [createWarnings, setCreateWarnings] = useState<string[]>([]);
   const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
+  const [patientAuthWarning, setPatientAuthWarning] = useState('');
 
   // Scheduling providers = users with PT, DPT, or ATC credential
   const providers = useMemo(
@@ -134,17 +136,28 @@ export default function SchedulePage() {
     if (endTime <= startTime) { setCreateError('End time must be after start time.'); return; }
     try {
       const locationId = fd.get('locationId') as string;
+      // Interpret the entered date/time as clinic-local (browser-local) and convert
+      // to UTC for storage. The old code appended 'Z' to a local wall-clock time,
+      // shifting appointments by the UTC offset (e.g. 9:00 AM CDT stored as 4:00 AM).
+      const startLocal = new Date(`${date}T${startTime}:00`);
+      const endLocal = new Date(`${date}T${endTime}:00`);
+      if (isNaN(startLocal.getTime()) || isNaN(endLocal.getTime())) {
+        setCreateError('Please enter valid start and end times.');
+        return;
+      }
       const res: any = await api.post('/scheduling', {
         patientId,
         therapistId,
         locationId: locationId || null,
-        startTime: `${date}T${startTime}:00.000Z`,
-        endTime: `${date}T${endTime}:00.000Z`,
+        startTime: startLocal.toISOString(),
+        endTime: endLocal.toISOString(),
         appointmentType: fd.get('appointmentType'),
         notes: (fd.get('notes') as string) || null,
       });
       const warnings: string[] = res?.data?.warnings || res?.warnings || [];
       setCreateWarnings(warnings);
+      setCreateSuccess('Appointment created successfully.');
+      setPatientAuthWarning('');
       setShowNewForm(false);
       loadData();
     } catch (err) {
@@ -160,6 +173,33 @@ export default function SchedulePage() {
       } else {
         setCreateError(err instanceof ApiError ? err.message : 'Failed to create appointment');
       }
+    }
+  }
+
+  // Auth-aware scheduling: when a patient is picked, surface authorization
+  // status inline so staff see coverage issues before creating the visit.
+  async function checkPatientAuth(patientId: string) {
+    setPatientAuthWarning('');
+    if (!patientId) return;
+    try {
+      const res: any = await api.get(`/authorizations?patient_id=${patientId}&limit=50`);
+      const auths: any[] = res?.data?.data || res?.data || [];
+      const usable = auths.filter(a =>
+        a.workflow_status === 'approved' || (a.workflow_status === 'draft' && a.status === 'active')
+      );
+      if (usable.length === 0) {
+        setPatientAuthWarning('No active authorization on file for this patient — verify coverage before scheduling.');
+        return;
+      }
+      const low = usable
+        .map(a => ({ a, left: (Number(a.authorized_visits) || 0) - (Number(a.used_visits) || 0) }))
+        .filter(x => x.left <= 2);
+      if (low.length > 0) {
+        const parts = low.map(x => `${x.a.authorization_number || 'Auth'}: ${x.left} visit${x.left === 1 ? '' : 's'} left`);
+        setPatientAuthWarning(`Low authorization balance — ${parts.join('; ')}.`);
+      }
+    } catch {
+      // Auth check is advisory; never block scheduling on its failure
     }
   }
 
@@ -257,6 +297,12 @@ export default function SchedulePage() {
       </div>
 
       {/* ── New Appointment Form ── */}
+      {createSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start justify-between">
+          <div className="text-sm text-green-800 font-medium">✓ {createSuccess}</div>
+          <button onClick={() => setCreateSuccess('')} className="text-sm text-green-700 underline ml-4">Dismiss</button>
+        </div>
+      )}
       {createWarnings.length > 0 && (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
           <div className="flex items-start justify-between">
@@ -277,10 +323,20 @@ export default function SchedulePage() {
           )}
           <div>
             <label className="label">Patient *</label>
-            <select name="patientId" required className="input">
+            <select
+              name="patientId"
+              required
+              className="input"
+              onChange={e => checkPatientAuth(e.target.value)}
+            >
               <option value="">Select patient...</option>
               {patients.map((p: any) => <option key={p.id} value={p.id}>{p.last_name}, {p.first_name} ({p.mrn})</option>)}
             </select>
+            {patientAuthWarning && (
+              <div className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                ⚠ {patientAuthWarning}
+              </div>
+            )}
           </div>
           <div>
             <label className="label">Provider *</label>

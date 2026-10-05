@@ -185,7 +185,13 @@ export default function AuthorizationsPage() {
     if (editing) {
       payload.workflow_status = form.status;
       delete payload.status;
-      if (form.follow_up_date) payload.follow_up_date = form.follow_up_date;
+      if (form.follow_up_date) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(form.follow_up_date)) {
+          setError('Follow-up date must be in YYYY-MM-DD format.');
+          return;
+        }
+        payload.follow_up_date = form.follow_up_date;
+      }
       if (form.denial_reason.trim()) payload.denial_reason = form.denial_reason.trim();
     }
     try {
@@ -330,7 +336,19 @@ export default function AuthorizationsPage() {
               {WORKFLOW_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
-          <div><label className="label">Follow-up Date</label><input type="date" value={form.follow_up_date} onChange={e => set('follow_up_date', e.target.value)} className="input" /></div>
+          <div>
+            <label className="label">Follow-up Date</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="YYYY-MM-DD"
+              pattern="\d{4}-\d{2}-\d{2}"
+              title="Enter date as YYYY-MM-DD"
+              value={form.follow_up_date}
+              onChange={e => set('follow_up_date', e.target.value)}
+              className="input"
+            />
+          </div>
           {form.status === 'denied' && (
             <div><label className="label">Denial Reason</label><input value={form.denial_reason} onChange={e => set('denial_reason', e.target.value)} className="input" placeholder="Reason from payer..." /></div>
           )}

@@ -100,27 +100,42 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
     }
 
     // Authorization-aware scheduling: warn (don't block) when the appointment
-    // would exceed authorized visits or fall outside an authorization's dates
+    // would exceed authorized visits, fall outside an authorization's dates,
+    // or when the patient has no usable authorization on file.
     const authWarnings: string[] = [];
+    // Usable = payer-approved via the workflow (new source of truth), or legacy
+    // status='active' for records created before the workflow_status column.
     const authResult = await query(
-      `SELECT authorization_number, authorized_visits, used_visits, end_date
+      `SELECT authorization_number, authorized_visits, used_visits, end_date, workflow_status, status
        FROM authorizations
        WHERE clinic_id = $1 AND patient_id = $2
-         AND status IN ('active', 'approved')`,
+         AND (workflow_status = 'approved' OR (workflow_status = 'draft' AND status = 'active'))`,
       [req.auth!.clinicId, input.patientId]
     );
+    if (authResult.rows.length === 0) {
+      authWarnings.push('Patient has no active authorization on file — verify coverage before this visit');
+    }
     const apptDate = input.startTime.slice(0, 10); // YYYY-MM-DD
     for (const auth of authResult.rows) {
-      const used = auth.used_visits as number;
-      const authorized = auth.authorized_visits as number;
+      const used = Number(auth.used_visits) || 0;
+      const authorized = Number(auth.authorized_visits) || 0;
+      const authLabel = auth.authorization_number || 'authorization';
       if (used + 1 > authorized) {
         authWarnings.push(
-          `Authorization ${auth.authorization_number}: this visit would exceed authorized visits (${used}/${authorized})`
+          `Authorization ${authLabel}: this visit would exceed authorized visits (${used}/${authorized} used)`
+        );
+      } else if (authorized - used <= 2) {
+        authWarnings.push(
+          `Authorization ${authLabel}: only ${authorized - used} visit${authorized - used === 1 ? '' : 's'} remaining`
         );
       }
-      if (auth.end_date && auth.end_date < apptDate) {
+      // end_date may come back as a Date object or YYYY-MM-DD string; normalize
+      const endDateStr = auth.end_date instanceof Date
+        ? auth.end_date.toISOString().slice(0, 10)
+        : String(auth.end_date || '').slice(0, 10);
+      if (endDateStr && endDateStr < apptDate) {
         authWarnings.push(
-          `Authorization ${auth.authorization_number} expires ${auth.end_date} before this appointment`
+          `Authorization ${authLabel} expires ${endDateStr} before this appointment`
         );
       }
     }

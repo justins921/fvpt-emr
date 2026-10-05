@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 interface PatientData {
   id: string; mrn: string; first_name: string; last_name: string;
@@ -242,6 +243,14 @@ function PatientNotes({ patientId }: { patientId: string }) {
     try {
       const res = await api.post<any>(`/notes/${noteId}/generate-claim`);
       const d = res?.data && typeof res.data === 'object' ? res.data : res;
+      // Validate the response shape before storing: guard against unexpected
+      // payloads (null, primitives, missing scrub) so rendering can never throw.
+      if (!d || typeof d !== 'object' || Array.isArray(d)) {
+        // eslint-disable-next-line no-console
+        console.warn('[generateClaim] unexpected response shape:', d);
+        setClaimResults(r => ({ ...r, [noteId]: { error: 'Unexpected response from server. Please try again.' } }));
+        return;
+      }
       setClaimResults(r => ({ ...r, [noteId]: d }));
     } catch (err) {
       setClaimResults(r => ({ ...r, [noteId]: { error: err instanceof Error ? err.message : 'Failed to generate claim' } }));
@@ -368,9 +377,13 @@ function PatientNotes({ patientId }: { patientId: string }) {
                   </button>
                 )}
                 {claimResults[note.id]?.error && (
-                  <div className="text-xs text-red-600 mt-1">{claimResults[note.id].error}</div>
+                  <div className="text-xs text-red-600 mt-1">{String(claimResults[note.id].error)}</div>
                 )}
-                {claimResults[note.id]?.scrub && <ClaimScrubResult result={claimResults[note.id]} />}
+                {claimResults[note.id]?.scrub && (
+                  <ErrorBoundary onReset={() => setClaimResults(r => { const c = { ...r }; delete c[note.id]; return c; })}>
+                    <ClaimScrubResult result={claimResults[note.id]} />
+                  </ErrorBoundary>
+                )}
               </div>
             )}
           </div>
@@ -388,11 +401,18 @@ function ClaimScrubResult({ result }: { result: any }) {
   const errors = toStrArray(scrub.errors);
   const warnings = toStrArray(scrub.warnings);
   const units = typeof result.units === 'number' ? result.units : null;
+  const zeroCharges = warnings.some(w => /charge.*defaulted to 0|fee schedule/i.test(w));
   return (
     <div className={`mt-2 rounded border p-3 text-sm ${passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
       <div className="flex items-center gap-2 font-semibold">
         {passed ? <span className="text-green-700">✓ Scrub passed</span> : <span className="text-red-700">✗ Scrub failed</span>}
       </div>
+      {zeroCharges && (
+        <div className="mt-2 rounded bg-amber-50 border border-amber-200 px-2 py-1.5 text-xs text-amber-800">
+          Claim created with <strong>$0.00 charges</strong> — no fee schedule amounts are configured yet.
+          Set fee schedule amounts before submitting this claim to the payer.
+        </div>
+      )}
       <div className="mt-1 text-xs text-slate-700 space-x-4">
         {result.claimNumber && <span>Claim <span className="font-mono font-medium">{String(result.claimNumber)}</span></span>}
         {units != null && <span>{units} unit{units === 1 ? '' : 's'}</span>}
