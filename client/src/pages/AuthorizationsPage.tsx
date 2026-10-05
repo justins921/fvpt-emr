@@ -220,7 +220,12 @@ export default function AuthorizationsPage() {
     try {
       const res = await api.post<any>(`/authorizations/${a.id}/packet`);
       const d = unwrap(res);
-      setPacketModal({ auth: a, packet: d.packet || d });
+      const packet = (d as any).packet || d;
+      if (!packet || typeof packet !== 'object' || !packet.authorization) {
+        setError('Packet generated but the response was missing authorization data. Please try again.');
+        return;
+      }
+      setPacketModal({ auth: a, packet });
       loadAuths(); loadFollowups();
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Packet generation failed'); }
     finally { setPacketLoading(null); }
