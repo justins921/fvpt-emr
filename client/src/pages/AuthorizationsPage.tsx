@@ -9,7 +9,7 @@ const Spinner = () => (
 );
 
 const EMPTY_AUTH = {
-  patient_id: '', insurance_name: '', auth_number: '', service_type: 'PT',
+  patient_id: '', insurance_id: '', auth_number: '', service_type: 'PT',
   visits_authorized: '', visits_used: '0', start_date: '', end_date: '', status: 'active', notes: '',
   follow_up_date: '', denial_reason: '',
 };
@@ -56,6 +56,7 @@ export default function AuthorizationsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ ...EMPTY_AUTH });
   const [patients, setPatients] = useState<any[]>([]);
+  const [insurances, setInsurances] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [followupCount, setFollowupCount] = useState(0);
   const [followupItems, setFollowupItems] = useState<any[]>([]);
@@ -90,15 +91,16 @@ export default function AuthorizationsPage() {
   }
 
   function openCreate() {
-    setEditing(null); setForm({ ...EMPTY_AUTH }); setShowForm(true); setError(''); setSuccess('');
+    setEditing(null); setForm({ ...EMPTY_AUTH }); setInsurances([]); setShowForm(true); setError(''); setSuccess('');
   }
 
   function openEdit(a: any) {
     setEditing(a);
+    loadInsurances(a.patient_id);
     setForm({
-      patient_id: a.patient_id || '', insurance_name: a.insurance_name || '',
-      auth_number: a.auth_number || '', service_type: a.service_type || 'PT',
-      visits_authorized: String(a.visits_authorized || ''), visits_used: String(a.visits_used || 0),
+      patient_id: a.patient_id || '', insurance_id: a.insurance_id || '',
+      auth_number: a.authorization_number || '', service_type: a.service_type || 'PT',
+      visits_authorized: String(a.authorized_visits ?? a.visits_authorized ?? ''), visits_used: String(a.visits_used || 0),
       start_date: a.start_date?.substring(0, 10) || '', end_date: a.end_date?.substring(0, 10) || '',
       status: a.status || 'active', notes: a.notes || '',
       follow_up_date: a.follow_up_date?.substring(0, 10) || '', denial_reason: a.denial_reason || '',
@@ -106,15 +108,63 @@ export default function AuthorizationsPage() {
     setShowForm(true); setError(''); setSuccess('');
   }
 
+  async function loadInsurances(patientId: string) {
+    if (!patientId) { setInsurances([]); return; }
+    try {
+      const res = await api.get<any>(`/patients/${patientId}/insurance`);
+      setInsurances(res.data || []);
+    } catch { setInsurances([]); }
+  }
+
+  function setPatient(patientId: string) {
+    setForm(f => ({ ...f, patient_id: patientId, insurance_id: '' }));
+    loadInsurances(patientId);
+  }
+
+  /** Turn a zod error detail array into human-readable per-field messages. */
+  function formatFieldErrors(details: unknown): string {
+    if (!Array.isArray(details)) return '';
+    const label: Record<string, string> = {
+      patient_id: 'Patient', insurance_id: 'Insurance',
+      authorization_number: 'Auth number', authorized_visits: 'Visits authorized',
+      start_date: 'Start date', end_date: 'End date', notes: 'Notes',
+    };
+    return details.map((d: any) => {
+      const field = Array.isArray(d.path) ? d.path.join('.') : String(d.path || 'field');
+      return `${label[field] || field}: ${d.message}`;
+    }).join(' ');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSuccess('');
-    const payload = { ...form, visits_authorized: Number(form.visits_authorized), visits_used: Number(form.visits_used) };
+    const payload: any = {
+      patient_id: form.patient_id,
+      insurance_id: form.insurance_id,
+      authorization_number: form.auth_number.trim() || null,
+      authorized_visits: Number(form.visits_authorized),
+      start_date: form.start_date,
+      end_date: form.end_date,
+      notes: form.notes.trim() || null,
+    };
+    // Edit mode supports the wider update schema
+    if (editing) {
+      payload.status = form.status;
+      if (form.follow_up_date) payload.follow_up_date = form.follow_up_date;
+      if (form.denial_reason.trim()) payload.denial_reason = form.denial_reason.trim();
+    }
     try {
       if (editing) { await api.put(`/authorizations/${editing.id}`, payload); setSuccess('Authorization updated'); }
       else { await api.post('/authorizations', payload); setSuccess('Authorization created'); }
       setShowForm(false); loadAuths(); loadFollowups();
-    } catch (err) { setError(err instanceof ApiError ? err.message : 'Save failed'); }
+    } catch (err) {
+      if (err instanceof ApiError && err.details) {
+        const msg = formatFieldErrors(err.details);
+        setError(msg || err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Save failed');
+      }
+    }
   }
 
   async function generatePacket(a: any) {
@@ -211,12 +261,22 @@ export default function AuthorizationsPage() {
           <h3 className="sm:col-span-2 lg:col-span-3 font-semibold">{editing ? 'Edit Authorization' : 'New Authorization'}</h3>
           <div>
             <label className="label">Patient *</label>
-            <select value={form.patient_id} onChange={e => set('patient_id', e.target.value)} required className="input">
+            <select value={form.patient_id} onChange={e => setPatient(e.target.value)} required className="input">
               <option value="">Select patient...</option>
               {patients.map((p: any) => <option key={p.id} value={p.id}>{p.last_name}, {p.first_name}</option>)}
             </select>
           </div>
-          <div><label className="label">Insurance *</label><input value={form.insurance_name} onChange={e => set('insurance_name', e.target.value)} required className="input" /></div>
+          <div>
+            <label className="label">Insurance *</label>
+            <select value={form.insurance_id} onChange={e => set('insurance_id', e.target.value)} required className="input" disabled={!form.patient_id}>
+              <option value="">{form.patient_id ? (insurances.length === 0 ? 'No insurance on file' : 'Select insurance...') : 'Select patient first...'}</option>
+              {insurances.map((i: any) => (
+                <option key={i.id} value={i.id}>
+                  {i.payer_name}{i.plan_name ? ` — ${i.plan_name}` : ''}{i.member_id ? ` (${i.member_id})` : ''}{i.is_primary ? ' [primary]' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div><label className="label">Auth Number</label><input value={form.auth_number} onChange={e => set('auth_number', e.target.value)} className="input" /></div>
           <div>
             <label className="label">Service Type</label>
@@ -450,7 +510,9 @@ function PayerRequirementsSection({ user }: { user: any }) {
     try {
       const res = await api.get<any>('/payer-requirements');
       const d = unwrap(res);
-      setPayers(Array.isArray(d) ? d : d.items || []);
+      // Server returns { success, data: [...] } — unwrap() passes arrays through untouched,
+      // so accept the array directly or under data/items keys.
+      setPayers(Array.isArray(d) ? d : d.data || d.items || []);
     } catch { setError('Failed to load payer requirements'); } finally { setLoading(false); }
   }
 

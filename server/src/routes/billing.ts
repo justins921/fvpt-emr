@@ -383,15 +383,15 @@ router.get('/era/:id/exceptions', requirePermission(Permission.BILLING_VIEW), as
     const autoPostable: Array<{
       claimNumber: string;
       cptCode: string;
-      billed: number;
-      paid: number;
+      billed_cents: number;
+      paid_cents: number;
       reason: null;
     }> = [];
     const exceptions: Array<{
       claimNumber: string;
       cptCode: string;
-      billed: number;
-      paid: number;
+      billed_cents: number;
+      paid_cents: number;
       reason: 'underpaid' | 'denied' | 'adjusted';
     }> = [];
 
@@ -405,8 +405,8 @@ router.get('/era/:id/exceptions', requirePermission(Permission.BILLING_VIEW), as
           autoPostable.push({
             claimNumber: claim.claimNumber,
             cptCode: item.cptCode,
-            billed: item.chargeAmount,
-            paid: item.paidAmount,
+            billed_cents: Math.round(item.chargeAmount),
+            paid_cents: Math.round(item.paidAmount),
             reason: null,
           });
         } else {
@@ -421,8 +421,8 @@ router.get('/era/:id/exceptions', requirePermission(Permission.BILLING_VIEW), as
           exceptions.push({
             claimNumber: claim.claimNumber,
             cptCode: item.cptCode,
-            billed: item.chargeAmount,
-            paid: item.paidAmount,
+            billed_cents: Math.round(item.chargeAmount),
+            paid_cents: Math.round(item.paidAmount),
             reason,
           });
         }

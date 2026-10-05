@@ -326,6 +326,8 @@ function ExerciseLibrary() {
 
 function CustomizeModal({ exercise, onClose, onSaved }: { exercise: Exercise; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
+  // Two-click confirm: armed state persists until the dialog closes (no timeout),
+  // so keyboard and assistive-tech users are never rushed. State is discarded on unmount.
   const [confirmReset, setConfirmReset] = useState(false);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
@@ -384,6 +386,7 @@ function CustomizeModal({ exercise, onClose, onSaved }: { exercise: Exercise; on
               <button
                 type="button"
                 onClick={handleReset}
+                aria-live="polite"
                 className={confirmReset ? "text-xs font-semibold text-red-600 underline" : "text-xs text-slate-500 underline"}
               >
                 {confirmReset ? "Click again to confirm reset" : "Reset to default"}
@@ -451,6 +454,7 @@ function SendSmsModal({ exercises, onClose, onSent }: { exercises: Exercise[]; o
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [sendError, setSendError] = useState('');
 
   useEffect(() => { loadPatients(); }, []);
 
@@ -473,15 +477,15 @@ function SendSmsModal({ exercises, onClose, onSent }: { exercises: Exercise[]; o
     if (!selectedPatient) return;
     if (body.length > 1600) { alert('Message too long (' + body.length + ' chars). Select fewer exercises.'); return; }
     setSending(true);
+    setSendError('');
     try {
       const res = await api.post<any>('/messaging/send', { patientId: selectedPatient.id, body, messageType: 'manual' });
-      const d = res.data || {};
+      const d = res.data || res || {};
       if (d.smsDelivered) setResult('Sent to ' + selectedPatient.first_name + ' ' + selectedPatient.last_name + '.');
-      else if (!d.smsConfigured) setResult('Saved (SMS provider not configured yet - message is queued).');
+      else if (d.smsConfigured === false) setResult('Saved (SMS provider not configured yet — message is queued).');
       else setResult('Message saved but SMS failed to deliver.');
-      setTimeout(onSent, 1500);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to send');
+      setSendError(err instanceof ApiError ? err.message : 'Failed to send');
     } finally {
       setSending(false);
     }
@@ -491,8 +495,14 @@ function SendSmsModal({ exercises, onClose, onSent }: { exercises: Exercise[]; o
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="card w-full max-w-md space-y-3">
         <h3 className="font-semibold">Send {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} via SMS</h3>
+        {sendError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{sendError}</p>}
         {result ? (
-          <p className="text-sm text-green-700">{result}</p>
+          <div className="space-y-3">
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">{result}</p>
+            <div className="flex justify-end">
+              <button type="button" onClick={onSent} className="btn-primary">Done</button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-3">
             <input type="search" placeholder="Search patient..." value={query} onChange={e => setQuery(e.target.value)} className="input" />

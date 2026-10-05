@@ -148,6 +148,7 @@ function PatientNotes({ patientId }: { patientId: string }) {
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [claimResults, setClaimResults] = useState<Record<string, any>>({});
   const [claimLoading, setClaimLoading] = useState<string | null>(null);
+  const [confirmSignId, setConfirmSignId] = useState<string | null>(null);
   const { user } = useAuth();
   const canManageTemplates = ['owner', 'admin', 'dev', 'therapist'].includes(user?.role || '');
 
@@ -225,7 +226,9 @@ function PatientNotes({ patientId }: { patientId: string }) {
   }
 
   async function signNote(noteId: string) {
-    if (!confirm('Sign and finalize this note? This action cannot be undone.')) return;
+    // Inline two-click confirm (no native dialog — reliable across browsers and assistive tech)
+    if (confirmSignId !== noteId) { setConfirmSignId(noteId); return; }
+    setConfirmSignId(null);
     try {
       await api.post(`/notes/${noteId}/sign`);
       loadNotes();
@@ -340,8 +343,16 @@ function PatientNotes({ patientId }: { patientId: string }) {
             {note.plan && <div className="mb-2"><span className="font-medium text-xs text-slate-500">P:</span> <span className="text-sm">{note.plan}</span></div>}
             {note.cpt_codes?.length > 0 && <div className="text-xs text-slate-500 mt-2">CPT: {note.cpt_codes.join(', ')}</div>}
             {note.status === 'draft' && (
-              <div className="mt-3 flex gap-2">
-                <button onClick={() => signNote(note.id)} className="btn-primary text-xs">Sign & Finalize</button>
+              <div className="mt-3 flex gap-2 items-center">
+                {confirmSignId === note.id ? (
+                  <>
+                    <span className="text-xs text-slate-600">Sign and finalize? This cannot be undone.</span>
+                    <button onClick={() => signNote(note.id)} className="btn-primary text-xs">Confirm Sign</button>
+                    <button onClick={() => setConfirmSignId(null)} className="text-xs text-slate-500 underline">Cancel</button>
+                  </>
+                ) : (
+                  <button onClick={() => signNote(note.id)} className="btn-primary text-xs">Sign & Finalize</button>
+                )}
               </div>
             )}
             {note.signed_at && <div className="mt-2 text-xs text-green-600">Signed by {note.signer_first_name} {note.signer_last_name} on {new Date(note.signed_at).toLocaleString()}</div>}

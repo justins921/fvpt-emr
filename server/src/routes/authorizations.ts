@@ -433,7 +433,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
     const schema = z.object({
       patient_id: z.string().uuid(),
       insurance_id: z.string().uuid(),
-      authorization_number: z.string().min(1).max(100),
+      authorization_number: z.string().min(1).max(100).optional().nullable(),
       authorized_visits: z.number().int().positive(),
       start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -475,7 +475,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
         req.auth!.clinicId,
         input.patient_id,
         input.insurance_id,
-        input.authorization_number,
+        input.authorization_number || null,
         input.authorized_visits,
         input.start_date,
         input.end_date,

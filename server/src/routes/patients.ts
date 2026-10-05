@@ -115,6 +115,31 @@ router.get('/:id', requirePermission(Permission.PATIENT_VIEW), async (req: Reque
   }
 });
 
+// List patient's insurance records (for authorization forms, eligibility checks)
+router.get('/:id/insurance', requirePermission(Permission.PATIENT_VIEW), async (req: Request, res: Response) => {
+  try {
+    const patientCheck = await query(
+      `SELECT id FROM patients WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (patientCheck.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Patient not found' });
+      return;
+    }
+    const result = await query(
+      `SELECT id, payer_name, plan_name, member_id, group_number, is_primary, is_active,
+              coverage_start, coverage_end, eligibility_status, eligibility_verified_at
+       FROM insurance
+       WHERE patient_id = $1 AND clinic_id = $2
+       ORDER BY is_primary DESC, payer_name ASC`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Create patient
 router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Request, res: Response) => {
   try {
