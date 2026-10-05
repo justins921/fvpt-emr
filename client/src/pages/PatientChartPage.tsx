@@ -381,18 +381,21 @@ function PatientNotes({ patientId }: { patientId: string }) {
 }
 
 function ClaimScrubResult({ result }: { result: any }) {
-  const scrub = result.scrub || {};
-  const passed = scrub.passed;
-  const errors = scrub.errors || [];
-  const warnings = scrub.warnings || [];
+  const scrub = result.scrub && typeof result.scrub === 'object' ? result.scrub : {};
+  const passed = scrub.passed === true;
+  const toStrArray = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : JSON.stringify(x))) : [];
+  const errors = toStrArray(scrub.errors);
+  const warnings = toStrArray(scrub.warnings);
+  const units = typeof result.units === 'number' ? result.units : null;
   return (
     <div className={`mt-2 rounded border p-3 text-sm ${passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
       <div className="flex items-center gap-2 font-semibold">
         {passed ? <span className="text-green-700">✓ Scrub passed</span> : <span className="text-red-700">✗ Scrub failed</span>}
       </div>
       <div className="mt-1 text-xs text-slate-700 space-x-4">
-        {result.claimNumber && <span>Claim <span className="font-mono font-medium">{result.claimNumber}</span></span>}
-        {result.units != null && <span>{result.units} unit{result.units === 1 ? '' : 's'}</span>}
+        {result.claimNumber && <span>Claim <span className="font-mono font-medium">{String(result.claimNumber)}</span></span>}
+        {units != null && <span>{units} unit{units === 1 ? '' : 's'}</span>}
       </div>
       {errors.length > 0 && (
         <ul className="mt-2 text-xs text-red-700 list-disc ml-5 space-y-0.5">

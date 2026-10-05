@@ -511,7 +511,7 @@ router.post('/', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req:
 router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req: Request, res: Response) => {
   try {
     const schema = z.object({
-      authorization_number: z.string().min(1).max(100).optional(),
+      authorization_number: z.string().min(1).max(100).optional().nullable(),
       authorized_visits: z.number().int().positive().optional(),
       start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -526,6 +526,14 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
         'active',
         'exhausted',
         'cancelled',
+      ]).optional(),
+      workflow_status: z.enum([
+        'draft',
+        'submitted',
+        'pending',
+        'approved',
+        'denied',
+        'expired',
       ]).optional(),
       follow_up_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
       denial_reason: z.string().max(2000).optional().nullable(),
@@ -543,6 +551,7 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
       end_date: 'end_date',
       notes: 'notes',
       status: 'status',
+      workflow_status: 'workflow_status',
       follow_up_date: 'follow_up_date',
       denial_reason: 'denial_reason',
     };
@@ -555,7 +564,7 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
     }
 
     // Transitioning to submitted stamps the submission time automatically
-    if (input.status === 'submitted') {
+    if (input.workflow_status === 'submitted' || input.status === 'submitted') {
       fields.push(`submitted_at = NOW()`);
     }
 

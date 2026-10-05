@@ -8,6 +8,15 @@ const Spinner = () => (
   </div>
 );
 
+/** Format a YYYY-MM-DD date string without timezone shift (new Date('2027-01-05') parses as UTC). */
+function fmtDateOnly(s: string | null | undefined): string {
+  if (!s) return '-';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+  if (m) return `${Number(m[2])}/${Number(m[3])}/${m[1]}`;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? String(s) : d.toLocaleDateString();
+}
+
 const EMPTY_AUTH = {
   patient_id: '', insurance_id: '', auth_number: '', service_type: 'PT',
   visits_authorized: '', visits_used: '0', start_date: '', end_date: '', status: 'active', notes: '',
@@ -102,7 +111,7 @@ export default function AuthorizationsPage() {
       auth_number: a.authorization_number || '', service_type: a.service_type || 'PT',
       visits_authorized: String(a.authorized_visits ?? a.visits_authorized ?? ''), visits_used: String(a.visits_used || 0),
       start_date: a.start_date?.substring(0, 10) || '', end_date: a.end_date?.substring(0, 10) || '',
-      status: a.status || 'active', notes: a.notes || '',
+      status: a.workflow_status || a.status || 'draft', notes: a.notes || '',
       follow_up_date: a.follow_up_date?.substring(0, 10) || '', denial_reason: a.denial_reason || '',
     });
     setShowForm(true); setError(''); setSuccess('');
@@ -112,7 +121,14 @@ export default function AuthorizationsPage() {
     if (!patientId) { setInsurances([]); return; }
     try {
       const res = await api.get<any>(`/patients/${patientId}/insurance`);
-      setInsurances(res.data || []);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      // Dedupe by id in case of overlapping loads
+      const seen = new Set<string>();
+      setInsurances(rows.filter((i: any) => {
+        if (!i || !i.id || seen.has(i.id)) return false;
+        seen.add(i.id);
+        return true;
+      }));
     } catch { setInsurances([]); }
   }
 
@@ -128,10 +144,19 @@ export default function AuthorizationsPage() {
       patient_id: 'Patient', insurance_id: 'Insurance',
       authorization_number: 'Auth number', authorized_visits: 'Visits authorized',
       start_date: 'Start date', end_date: 'End date', notes: 'Notes',
+      follow_up_date: 'Follow-up date', denial_reason: 'Denial reason', status: 'Status',
+    };
+    const plainMessage = (raw: string, field: string): string => {
+      if (/expected string, received null/i.test(raw) || /expected string, received undefined/i.test(raw))
+        return `${label[field] || field}: this field is required`;
+      if (/expected number/i.test(raw)) return `${label[field] || field}: enter a valid number`;
+      if (/invalid enum value/i.test(raw)) return `${label[field] || field}: select a valid option`;
+      if (/invalid string/i.test(raw) || /invalid date/i.test(raw)) return `${label[field] || field}: enter a valid value`;
+      return `${label[field] || field}: ${raw}`;
     };
     return details.map((d: any) => {
       const field = Array.isArray(d.path) ? d.path.join('.') : String(d.path || 'field');
-      return `${label[field] || field}: ${d.message}`;
+      return plainMessage(String(d.message || 'invalid value'), field);
     }).join(' ');
   }
 
@@ -156,9 +181,10 @@ export default function AuthorizationsPage() {
       end_date: form.end_date,
       notes: form.notes.trim() || null,
     };
-    // Edit mode supports the wider update schema
+    // Edit mode supports the wider update schema — status maps to the workflow column
     if (editing) {
-      payload.status = form.status;
+      payload.workflow_status = form.status;
+      delete payload.status;
       if (form.follow_up_date) payload.follow_up_date = form.follow_up_date;
       if (form.denial_reason.trim()) payload.denial_reason = form.denial_reason.trim();
     }
@@ -230,7 +256,7 @@ export default function AuthorizationsPage() {
                   <span className="text-slate-500 ml-2">({a.insurance_name})</span>
                 </span>
                 {a.follow_up_date && (
-                  <span className="text-orange-700">Due {new Date(a.follow_up_date).toLocaleDateString()}</span>
+                  <span className="text-orange-700">Due {fmtDateOnly(a.follow_up_date)}</span>
                 )}
               </div>
             ))}
@@ -344,9 +370,10 @@ export default function AuthorizationsPage() {
             </thead>
             <tbody className="divide-y">
               {auths.map((a: any) => {
-                const used = a.visits_used || 0;
-                const total = a.visits_authorized || 1;
-                const pct = Math.min((used / total) * 100, 100);
+                const used = a.used_visits ?? 0;
+                const total = a.authorized_visits ?? 0;
+                const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+                const displayStatus = a.workflow_status || a.status;
                 return (
                   <tr key={a.id} className={`hover:bg-slate-50 ${urgencyColor(a)}`}>
                     <td className="px-4 py-3 font-medium">{a.patient_last_name}, {a.patient_first_name}</td>
@@ -360,8 +387,8 @@ export default function AuthorizationsPage() {
                         <span className="text-xs font-mono whitespace-nowrap">{used}/{total}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs">{a.end_date ? new Date(a.end_date).toLocaleDateString() : '-'}</td>
-                    <td className="px-4 py-3"><span className={STATUS_BADGE[a.status] || 'badge-gray'}>{a.status}</span></td>
+                    <td className="px-4 py-3 text-xs">{fmtDateOnly(a.end_date)}</td>
+                    <td className="px-4 py-3"><span className={STATUS_BADGE[displayStatus] || 'badge-gray'}>{displayStatus}</span></td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1 items-start">
                         <div className="flex gap-2">
@@ -446,7 +473,7 @@ function PacketModal({ auth, packet, onClose }: { auth: any; packet: any; onClos
           <PacketSection title="Patient">
             <dl>
               <Row label="Name" value={`${patient.last_name || ''}, ${patient.first_name || ''}`.replace(/^, $/, '-')} />
-              <Row label="DOB" value={patient.date_of_birth ? new Date(patient.date_of_birth).toLocaleDateString() : undefined} />
+              <Row label="DOB" value={patient.date_of_birth ? fmtDateOnly(patient.date_of_birth) : undefined} />
               <Row label="MRN" value={patient.mrn} />
               <Row label="Phone" value={patient.phone} />
             </dl>
@@ -465,9 +492,9 @@ function PacketModal({ auth, packet, onClose }: { auth: any; packet: any; onClos
               <Row label="Status" value={authorization.status} />
               <Row label="Visits Authorized" value={authorization.visits_authorized} />
               <Row label="Visits Used" value={authorization.visits_used} />
-              <Row label="Start Date" value={authorization.start_date ? new Date(authorization.start_date).toLocaleDateString() : undefined} />
-              <Row label="End Date" value={authorization.end_date ? new Date(authorization.end_date).toLocaleDateString() : undefined} />
-              <Row label="Follow-up Date" value={authorization.follow_up_date ? new Date(authorization.follow_up_date).toLocaleDateString() : undefined} />
+              <Row label="Start Date" value={authorization.start_date ? fmtDateOnly(authorization.start_date) : undefined} />
+              <Row label="End Date" value={authorization.end_date ? fmtDateOnly(authorization.end_date) : undefined} />
+              <Row label="Follow-up Date" value={authorization.follow_up_date ? fmtDateOnly(authorization.follow_up_date) : undefined} />
             </dl>
           </PacketSection>
           <PacketSection title="Diagnosis Codes">

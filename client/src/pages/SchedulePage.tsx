@@ -63,6 +63,7 @@ export default function SchedulePage() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [mobileProviderId, setMobileProviderId] = useState<string>('all');
   const [createWarnings, setCreateWarnings] = useState<string[]>([]);
+  const [createError, setCreateError] = useState('');
 
   // Scheduling providers = users with PT, DPT, or ATC credential
   const providers = useMemo(
@@ -117,27 +118,48 @@ export default function SchedulePage() {
 
   async function handleCreateAppointment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setCreateError('');
     const fd = new FormData(e.currentTarget);
     const date = fd.get('date') as string;
     const startTime = fd.get('startTime') as string;
     const endTime = fd.get('endTime') as string;
+    const patientId = fd.get('patientId') as string;
+    const therapistId = fd.get('therapistId') as string;
+    // Client-side pre-validation with specific messages
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(patientId || '')) { setCreateError('Please select a patient.'); return; }
+    if (!uuidRe.test(therapistId || '')) { setCreateError('Please select a provider.'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) { setCreateError('Please enter a valid date.'); return; }
+    if (!/^\d{2}:\d{2}$/.test(startTime || '') || !/^\d{2}:\d{2}$/.test(endTime || '')) { setCreateError('Please enter valid start and end times.'); return; }
+    if (endTime <= startTime) { setCreateError('End time must be after start time.'); return; }
     try {
       const locationId = fd.get('locationId') as string;
       const res: any = await api.post('/scheduling', {
-        patientId: fd.get('patientId'),
-        therapistId: fd.get('therapistId'),
+        patientId,
+        therapistId,
         locationId: locationId || null,
         startTime: `${date}T${startTime}:00.000Z`,
         endTime: `${date}T${endTime}:00.000Z`,
         appointmentType: fd.get('appointmentType'),
-        notes: fd.get('notes') || null,
+        notes: (fd.get('notes') as string) || null,
       });
       const warnings: string[] = res?.data?.warnings || res?.warnings || [];
       setCreateWarnings(warnings);
       setShowNewForm(false);
       loadData();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to create appointment');
+      if (err instanceof ApiError && (err as any).details) {
+        const details = (err as any).details;
+        const msg = Array.isArray(details)
+          ? details.map((d: any) => {
+              const field = Array.isArray(d.path) ? d.path.join('.') : String(d.path || 'field');
+              return `${field}: ${d.message}`;
+            }).join(' ')
+          : err.message;
+        setCreateError(msg || 'Failed to create appointment');
+      } else {
+        setCreateError(err instanceof ApiError ? err.message : 'Failed to create appointment');
+      }
     }
   }
 
@@ -250,6 +272,9 @@ export default function SchedulePage() {
       )}
       {showNewForm && (
         <form onSubmit={handleCreateAppointment} className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {createError && (
+            <div className="sm:col-span-2 lg:col-span-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{createError}</div>
+          )}
           <div>
             <label className="label">Patient *</label>
             <select name="patientId" required className="input">

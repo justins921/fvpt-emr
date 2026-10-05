@@ -451,7 +451,8 @@ router.post('/:id/generate-claim', requirePermission(Permission.BILLING_CREATE),
       data: {
         claimId,
         claimNumber,
-        units: calculatedUnits,
+        units: calculatedUnits.totalUnits,
+        totalMinutes: calculatedUnits.totalMinutes,
         scrub: {
           passed: scrub.passed,
           errors: scrub.errors,
