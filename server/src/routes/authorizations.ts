@@ -11,7 +11,7 @@ router.use(authenticate, validateSession, tenantScope);
 // ── List Authorizations ──
 router.get('/', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Request, res: Response) => {
   try {
-    const { patient_id, status, expiring_within_days, page = '1', limit = '25' } = req.query;
+    const { patient_id, status, expiring_within_days, needs_followup, page = '1', limit = '25' } = req.query;
     const conditions: string[] = ['a.clinic_id = $1'];
     const params: unknown[] = [req.auth!.clinicId];
     let idx = 2;
@@ -34,6 +34,12 @@ router.get('/', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Re
         conditions.push(`a.end_date >= CURRENT_DATE`);
         conditions.push(`a.status = 'active'`);
       }
+    }
+
+    if (needs_followup === 'true') {
+      conditions.push(`a.status = 'pending'`);
+      conditions.push(`a.follow_up_date IS NOT NULL`);
+      conditions.push(`a.follow_up_date <= CURRENT_DATE`);
     }
 
     const pageNum = Math.max(1, parseInt(page as string, 10));
@@ -125,6 +131,265 @@ router.get('/alerts', requirePermission(Permission.AUTHORIZATION_VIEW), async (r
       data: {
         expiring_soon: expiringResult.rows,
         low_visits: lowVisitsResult.rows,
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Get Alerts (Pending Follow-ups) ──
+// Must be defined BEFORE /:id so it does not get caught by the param route
+router.get('/alerts/pending-followups', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT
+         a.id,
+         a.authorization_number,
+         a.authorized_visits,
+         a.used_visits,
+         a.start_date,
+         a.end_date,
+         a.status,
+         a.follow_up_date,
+         a.denial_reason,
+         p.first_name as patient_first_name,
+         p.last_name as patient_last_name,
+         p.mrn as patient_mrn,
+         i.payer_name
+       FROM authorizations a
+       JOIN patients p ON a.patient_id = p.id AND p.clinic_id = a.clinic_id
+       LEFT JOIN insurance i ON a.insurance_id = i.id AND i.clinic_id = a.clinic_id
+       WHERE a.clinic_id = $1
+         AND a.status = 'pending'
+         AND a.follow_up_date IS NOT NULL
+         AND a.follow_up_date <= CURRENT_DATE
+       ORDER BY a.follow_up_date ASC`,
+      [req.auth!.clinicId]
+    );
+
+    const list = result.rows.map((row) => ({
+      id: row.id,
+      patient_name: `${row.patient_first_name} ${row.patient_last_name}`,
+      payer: row.payer_name,
+      follow_up_date: row.follow_up_date,
+      authorization_number: row.authorization_number,
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        count: list.length,
+        followups: list,
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Generate Authorization Packet ──
+// Compiles patient demographics, insurance, most recent eval note, and the
+// latest plan of care into a JSON packet the client can render as print HTML.
+router.post('/:id/packet', requirePermission(Permission.AUTHORIZATION_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const authResult = await query(
+      `SELECT * FROM authorizations WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (authResult.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Authorization not found' });
+      return;
+    }
+    const auth = authResult.rows[0];
+
+    // Patient demographics
+    const patientResult = await query(
+      `SELECT * FROM patients WHERE id = $1 AND clinic_id = $2`,
+      [auth.patient_id, req.auth!.clinicId]
+    );
+    if (patientResult.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Patient not found' });
+      return;
+    }
+    const p = patientResult.rows[0];
+
+    // Insurance record (optional)
+    let insurance = null;
+    if (auth.insurance_id) {
+      const insuranceResult = await query(
+        `SELECT * FROM insurance WHERE id = $1 AND clinic_id = $2`,
+        [auth.insurance_id, req.auth!.clinicId]
+      );
+      if (insuranceResult.rows.length > 0) {
+        const i = insuranceResult.rows[0];
+        insurance = {
+          payer_name: i.payer_name,
+          payer_id: i.payer_id,
+          plan_name: i.plan_name,
+          member_id: i.member_id,
+          group_number: i.group_number,
+          subscriber_name: i.subscriber_name,
+          subscriber_dob: i.subscriber_dob,
+          coverage_start: i.coverage_start,
+          coverage_end: i.coverage_end,
+          eligibility_status: i.eligibility_status,
+          eligibility_verified_at: i.eligibility_verified_at,
+        };
+      }
+    }
+
+    // Most recent eval-type clinical note
+    const evalResult = await query(
+      `SELECT cn.*, u.first_name AS author_first_name, u.last_name AS author_last_name
+       FROM clinical_notes cn
+       JOIN users u ON cn.author_id = u.id
+       WHERE cn.patient_id = $1 AND cn.clinic_id = $2
+         AND cn.note_type IN ('evaluation', 'eval')
+       ORDER BY cn.created_at DESC
+       LIMIT 1`,
+      [auth.patient_id, req.auth!.clinicId]
+    );
+    const evalRow = evalResult.rows[0] || null;
+
+    // Latest plan of care
+    const pocResult = await query(
+      `SELECT * FROM plans_of_care
+       WHERE patient_id = $1 AND clinic_id = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [auth.patient_id, req.auth!.clinicId]
+    );
+    const pocRow = pocResult.rows[0] || null;
+
+    const evalNote = evalRow
+      ? {
+          id: evalRow.id,
+          note_type: evalRow.note_type,
+          created_at: evalRow.created_at,
+          author_name: `${evalRow.author_first_name} ${evalRow.author_last_name}`,
+          subjective: evalRow.subjective,
+          objective: evalRow.objective,
+          assessment: evalRow.assessment,
+          plan: evalRow.plan,
+          icd10_codes: evalRow.icd10_codes,
+          cpt_codes: evalRow.cpt_codes,
+          signed_at: evalRow.signed_at,
+        }
+      : null;
+
+    const planOfCare = pocRow
+      ? {
+          id: pocRow.id,
+          start_date: pocRow.start_date,
+          end_date: pocRow.end_date,
+          frequency: pocRow.frequency,
+          duration_weeks: pocRow.duration_weeks,
+          diagnosis_codes: pocRow.diagnosis_codes,
+          treatment_goals: pocRow.treatment_goals,
+          physician_name: pocRow.physician_name,
+          physician_npi: pocRow.physician_npi,
+          certification_date: pocRow.certification_date,
+          physician_signature_status: pocRow.physician_signature_status,
+        }
+      : null;
+
+    const diagnosisCodes: string[] = Array.from(
+      new Set<string>([
+        ...((evalRow?.icd10_codes as string[] | null) || []),
+        ...((pocRow?.diagnosis_codes as string[] | null) || []),
+      ])
+    );
+
+    const justificationParts: string[] = [];
+    if (evalRow?.assessment) justificationParts.push(`Assessment: ${evalRow.assessment}`);
+    if (evalRow?.plan) justificationParts.push(`Plan: ${evalRow.plan}`);
+    if (pocRow?.notes) justificationParts.push(`Plan of care notes: ${pocRow.notes}`);
+    const clinicalJustification = justificationParts.join('\n\n');
+
+    const packet = {
+      generated_at: new Date().toISOString(),
+      patient: {
+        first_name: p.first_name,
+        last_name: p.last_name,
+        mrn: p.mrn,
+        date_of_birth: p.date_of_birth,
+        gender: p.gender,
+        phone: p.phone,
+        email: p.email,
+        address_line1: p.address_line1,
+        address_line2: p.address_line2,
+        city: p.city,
+        state: p.state,
+        zip: p.zip,
+      },
+      insurance,
+      authorization: {
+        authorization_number: auth.authorization_number,
+        authorized_visits: auth.authorized_visits,
+        used_visits: auth.used_visits,
+        start_date: auth.start_date,
+        end_date: auth.end_date,
+        status: auth.status,
+        workflow_status: auth.workflow_status,
+        follow_up_date: auth.follow_up_date,
+        denial_reason: auth.denial_reason,
+      },
+      evalNote,
+      planOfCare,
+      diagnosisCodes,
+      clinicalJustification,
+    };
+
+    await query(
+      `UPDATE authorizations
+       SET packet_data = $3, packet_generated_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId, JSON.stringify(packet)]
+    );
+
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.AUTHORIZATION_EDIT,
+      resourceType: 'authorization',
+      resourceId: req.params.id,
+      details: { action: 'packet_generated' },
+      req,
+    });
+
+    res.json({ success: true, data: packet });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Get Stored Authorization Packet ──
+// Must be defined BEFORE /:id so it does not get caught by the param route
+router.get('/:id/packet', requirePermission(Permission.AUTHORIZATION_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT packet_data, packet_generated_at
+       FROM authorizations
+       WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Authorization not found' });
+      return;
+    }
+
+    if (!result.rows[0].packet_data) {
+      res.status(404).json({ success: false, error: 'No packet generated for this authorization' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        packet: result.rows[0].packet_data,
+        packet_generated_at: result.rows[0].packet_generated_at,
       },
     });
   } catch {
@@ -251,7 +516,19 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
       start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notes: z.string().max(2000).optional().nullable(),
-      status: z.enum(['active', 'exhausted', 'expired', 'cancelled']).optional(),
+      status: z.enum([
+        'draft',
+        'submitted',
+        'pending',
+        'approved',
+        'denied',
+        'expired',
+        'active',
+        'exhausted',
+        'cancelled',
+      ]).optional(),
+      follow_up_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+      denial_reason: z.string().max(2000).optional().nullable(),
     });
     const input = schema.parse(req.body);
 
@@ -266,6 +543,8 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
       end_date: 'end_date',
       notes: 'notes',
       status: 'status',
+      follow_up_date: 'follow_up_date',
+      denial_reason: 'denial_reason',
     };
 
     for (const [key, value] of Object.entries(input)) {
@@ -273,6 +552,11 @@ router.put('/:id', requirePermission(Permission.AUTHORIZATION_MANAGE), async (re
         fields.push(`${fieldMap[key]} = $${idx++}`);
         values.push(value ?? null);
       }
+    }
+
+    // Transitioning to submitted stamps the submission time automatically
+    if (input.status === 'submitted') {
+      fields.push(`submitted_at = NOW()`);
     }
 
     if (fields.length === 0) {

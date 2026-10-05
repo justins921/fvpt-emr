@@ -62,6 +62,7 @@ export default function SchedulePage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [mobileProviderId, setMobileProviderId] = useState<string>('all');
+  const [createWarnings, setCreateWarnings] = useState<string[]>([]);
 
   // Scheduling providers = users with PT, DPT, or ATC credential
   const providers = useMemo(
@@ -122,7 +123,7 @@ export default function SchedulePage() {
     const endTime = fd.get('endTime') as string;
     try {
       const locationId = fd.get('locationId') as string;
-      await api.post('/scheduling', {
+      const res: any = await api.post('/scheduling', {
         patientId: fd.get('patientId'),
         therapistId: fd.get('therapistId'),
         locationId: locationId || null,
@@ -131,6 +132,8 @@ export default function SchedulePage() {
         appointmentType: fd.get('appointmentType'),
         notes: fd.get('notes') || null,
       });
+      const warnings: string[] = res?.data?.warnings || res?.warnings || [];
+      setCreateWarnings(warnings);
       setShowNewForm(false);
       loadData();
     } catch (err) {
@@ -232,6 +235,19 @@ export default function SchedulePage() {
       </div>
 
       {/* ── New Appointment Form ── */}
+      {createWarnings.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <h3 className="font-semibold text-amber-800">
+              ⚠ Appointment created with {createWarnings.length} warning{createWarnings.length === 1 ? '' : 's'}
+            </h3>
+            <button onClick={() => setCreateWarnings([])} className="text-sm text-amber-700 underline">Dismiss</button>
+          </div>
+          <ul className="mt-2 text-sm text-amber-900 list-disc ml-5 space-y-1">
+            {createWarnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
       {showNewForm && (
         <form onSubmit={handleCreateAppointment} className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>

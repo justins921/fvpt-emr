@@ -99,6 +99,32 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
       return;
     }
 
+    // Authorization-aware scheduling: warn (don't block) when the appointment
+    // would exceed authorized visits or fall outside an authorization's dates
+    const authWarnings: string[] = [];
+    const authResult = await query(
+      `SELECT authorization_number, authorized_visits, used_visits, end_date
+       FROM authorizations
+       WHERE clinic_id = $1 AND patient_id = $2
+         AND status IN ('active', 'approved')`,
+      [req.auth!.clinicId, input.patientId]
+    );
+    const apptDate = input.startTime.slice(0, 10); // YYYY-MM-DD
+    for (const auth of authResult.rows) {
+      const used = auth.used_visits as number;
+      const authorized = auth.authorized_visits as number;
+      if (used + 1 > authorized) {
+        authWarnings.push(
+          `Authorization ${auth.authorization_number}: this visit would exceed authorized visits (${used}/${authorized})`
+        );
+      }
+      if (auth.end_date && auth.end_date < apptDate) {
+        authWarnings.push(
+          `Authorization ${auth.authorization_number} expires ${auth.end_date} before this appointment`
+        );
+      }
+    }
+
     const result = await query(
       `INSERT INTO appointments (clinic_id, patient_id, therapist_id, location_id, start_time, end_time, appointment_type, notes, recurring_rule)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
@@ -114,7 +140,7 @@ router.post('/', requirePermission(Permission.SCHEDULE_CREATE), async (req: Requ
       req,
     });
 
-    res.status(201).json({ success: true, data: { id: result.rows[0].id } });
+    res.status(201).json({ success: true, data: { id: result.rows[0].id, warnings: authWarnings } });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });

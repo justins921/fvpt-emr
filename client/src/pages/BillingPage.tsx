@@ -181,12 +181,15 @@ function ARAgingReport() {
 function ERAImport() {
   const [content, setContent] = useState('');
   const [result, setResult] = useState<any>(null);
+  const [exceptions, setExceptions] = useState<any>(null);
+  const [excLoading, setExcLoading] = useState(false);
 
   async function handleImport() {
     if (!content.trim()) return;
     try {
       const res = await api.post<any>('/billing/era/import', { filename: `ERA_${Date.now()}.835`, content });
       setResult(res.data);
+      setExceptions(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Import failed');
     }
@@ -199,6 +202,20 @@ function ERAImport() {
       alert(`Posted ${res.data?.posted || 0} claims. Errors: ${res.data?.errors?.join(', ') || 'none'}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Post failed');
+    }
+  }
+
+  async function viewExceptions() {
+    if (!result?.id) return;
+    setExcLoading(true);
+    try {
+      const res = await api.get<any>(`/billing/era/${result.id}/exceptions`);
+      const d = res?.data && typeof res.data === 'object' ? res.data : res;
+      setExceptions(d);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to load exceptions');
+    } finally {
+      setExcLoading(false);
     }
   }
 
@@ -216,6 +233,11 @@ function ERAImport() {
         <div className="mt-3 flex gap-2">
           <button onClick={handleImport} className="btn-primary">Import ERA</button>
           {result && <button onClick={handlePost} className="btn-secondary">Post to Ledger</button>}
+          {result?.id && (
+            <button onClick={viewExceptions} disabled={excLoading} className="btn-secondary disabled:opacity-50">
+              {excLoading ? 'Loading...' : 'View Exceptions'}
+            </button>
+          )}
         </div>
       </div>
       {result?.parsed && (
@@ -227,6 +249,47 @@ function ERAImport() {
             <div>Total Paid: ${(result.parsed.totalPaid / 100).toFixed(2)}</div>
             <div>Claims: {result.parsed.claims?.length || 0}</div>
           </div>
+        </div>
+      )}
+      {exceptions && (
+        <div className="card">
+          <h3 className="font-semibold mb-2">ERA Posting Exceptions</h3>
+          <div className="mb-3">
+            <span className="badge-green text-sm">✓ {exceptions.autoPostable?.length || 0} auto-postable</span>
+            <span className="ml-2 badge-yellow text-sm">⚠ {exceptions.exceptions?.length || 0} exceptions</span>
+          </div>
+          {exceptions.exceptions?.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b">
+                  <tr>
+                    <th className="text-left px-4 py-2">Claim</th>
+                    <th className="text-left px-4 py-2">CPT</th>
+                    <th className="text-right px-4 py-2">Billed</th>
+                    <th className="text-right px-4 py-2">Paid</th>
+                    <th className="text-left px-4 py-2">Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {exceptions.exceptions.map((e: any, i: number) => (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-mono text-xs">{e.claim_number || e.claim || e.claimNumber || '-'}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{e.cpt || e.cpt_code || e.cptCode || '-'}</td>
+                      <td className="px-4 py-2 text-right font-mono text-xs">
+                        {e.billed_cents != null ? `$${(e.billed_cents / 100).toFixed(2)}` : e.billed != null ? `$${Number(e.billed).toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono text-xs">
+                        {e.paid_cents != null ? `$${(e.paid_cents / 100).toFixed(2)}` : e.paid != null ? `$${Number(e.paid).toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-amber-700">{e.reason || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-500">No exceptions — all items auto-postable.</div>
+          )}
         </div>
       )}
     </div>

@@ -8,6 +8,21 @@ import { logAudit } from '../services/audit';
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
 
+/**
+ * Structured eligibility snapshot written to the insurance record after a
+ * successful manual entry or electronic check. Money fields are in cents.
+ */
+export interface ManualEligibilityResult {
+  status: 'eligible' | 'ineligible';
+  copay_cents: number | null;
+  deductible_cents: number | null;
+  deductible_met_cents: number | null;
+  pt_visits_allowed: number | null;
+  pt_visits_used: number | null;
+  requires_authorization: boolean | null;
+  checked_at: string;
+}
+
 // ── Run Eligibility Check ──
 router.post('/check', requirePermission(Permission.ELIGIBILITY_CHECK), async (req: Request, res: Response) => {
   try {
@@ -106,6 +121,26 @@ router.post('/check', requirePermission(Permission.ELIGIBILITY_CHECK), async (re
           details: { method: 'electronic', adapter: clearinghouseType, status },
           req,
         });
+
+        // Snapshot the eligibility outcome onto the insurance record
+        const electronicSummary: ManualEligibilityResult = {
+          status,
+          copay_cents: (details.copay as number | null) ?? null,
+          deductible_cents: (details.deductible as number | null) ?? null,
+          deductible_met_cents: (details.deductibleMet as number | null) ?? null,
+          pt_visits_allowed: (details.ptVisitsAllowed as number | null) ?? null,
+          pt_visits_used: (details.ptVisitsUsed as number | null) ?? null,
+          requires_authorization: (details.authRequired as boolean | null) ?? null,
+          checked_at: new Date().toISOString(),
+        };
+        await query(
+          `UPDATE insurance
+           SET eligibility_verified_at = NOW(),
+               eligibility_status = $1,
+               eligibility_summary = $2
+           WHERE id = $3 AND clinic_id = $4`,
+          [status, JSON.stringify(electronicSummary), input.insuranceId, req.auth!.clinicId]
+        );
 
         res.status(201).json({ success: true, data: result.rows[0] });
       } catch (adapterErr) {
@@ -341,6 +376,26 @@ router.post('/manual', requirePermission(Permission.ELIGIBILITY_CHECK), async (r
       details: { method: 'manual', status: input.status },
       req,
     });
+
+    // Snapshot the manual entry onto the insurance record
+    const manualSummary: ManualEligibilityResult = {
+      status: input.status,
+      copay_cents: input.copayCents,
+      deductible_cents: input.deductibleCents,
+      deductible_met_cents: input.deductibleMetCents,
+      pt_visits_allowed: input.ptVisitsAllowed,
+      pt_visits_used: input.ptVisitsUsed,
+      requires_authorization: input.requiresAuthorization,
+      checked_at: new Date().toISOString(),
+    };
+    await query(
+      `UPDATE insurance
+       SET eligibility_verified_at = NOW(),
+           eligibility_status = $1,
+           eligibility_summary = $2
+       WHERE id = $3 AND clinic_id = $4`,
+      [input.status, JSON.stringify(manualSummary), input.insuranceId, req.auth!.clinicId]
+    );
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {

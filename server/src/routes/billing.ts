@@ -365,6 +365,83 @@ router.post('/era/:id/post', requirePermission(Permission.ERA_IMPORT), async (re
   }
 });
 
+// ERA exceptions — classify each line item as auto-postable or an exception.
+// Read-only: does NOT change existing /era/:id/post behavior.
+router.get('/era/:id/exceptions', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const eraResult = await query(
+      `SELECT * FROM era_files WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (eraResult.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'ERA file not found' });
+      return;
+    }
+
+    const parsed = parseERA(eraResult.rows[0].raw_content);
+
+    const autoPostable: Array<{
+      claimNumber: string;
+      cptCode: string;
+      billed: number;
+      paid: number;
+      reason: null;
+    }> = [];
+    const exceptions: Array<{
+      claimNumber: string;
+      cptCode: string;
+      billed: number;
+      paid: number;
+      reason: 'underpaid' | 'denied' | 'adjusted';
+    }> = [];
+
+    for (const claim of parsed.claims) {
+      for (const item of claim.lineItems) {
+        if (
+          item.paidAmount === item.chargeAmount &&
+          item.adjustmentAmount === 0 &&
+          !item.denialReason
+        ) {
+          autoPostable.push({
+            claimNumber: claim.claimNumber,
+            cptCode: item.cptCode,
+            billed: item.chargeAmount,
+            paid: item.paidAmount,
+            reason: null,
+          });
+        } else {
+          let reason: 'underpaid' | 'denied' | 'adjusted';
+          if (item.paidAmount === 0 && (item.denialReason || item.adjustmentAmount > 0)) {
+            reason = 'denied';
+          } else if (item.paidAmount > 0 && item.paidAmount < item.chargeAmount) {
+            reason = 'underpaid';
+          } else {
+            reason = 'adjusted';
+          }
+          exceptions.push({
+            claimNumber: claim.claimNumber,
+            cptCode: item.cptCode,
+            billed: item.chargeAmount,
+            paid: item.paidAmount,
+            reason,
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        eraId: req.params.id,
+        autoPostable,
+        exceptions,
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // ── A/R Aging Report ──
 router.get('/reports/ar-aging', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
   try {

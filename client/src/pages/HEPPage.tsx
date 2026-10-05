@@ -326,6 +326,7 @@ function ExerciseLibrary() {
 
 function CustomizeModal({ exercise, onClose, onSaved }: { exercise: Exercise; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -350,12 +351,13 @@ function CustomizeModal({ exercise, onClose, onSaved }: { exercise: Exercise; on
   }
 
   async function handleReset() {
-    if (!confirm('Reset to the shared default name and image?')) return;
+    if (!confirmReset) { setConfirmReset(true); return; }
     try {
       await api.delete('/exercises/' + exercise.id + '/override');
       onSaved();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : 'Failed to reset');
+      setConfirmReset(false);
     }
   }
 
@@ -379,7 +381,13 @@ function CustomizeModal({ exercise, onClose, onSaved }: { exercise: Exercise; on
         <div className="flex gap-2 justify-between pt-1">
           <div>
             {exercise.is_customized && (
-              <button type="button" onClick={handleReset} className="text-xs text-slate-500 underline">Reset to default</button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className={confirmReset ? "text-xs font-semibold text-red-600 underline" : "text-xs text-slate-500 underline"}
+              >
+                {confirmReset ? "Click again to confirm reset" : "Reset to default"}
+              </button>
             )}
           </div>
           <div className="flex gap-2">
@@ -521,6 +529,7 @@ function ProgramList() {
   const [selectedExercises, setSelectedExercises] = useState<ProgramExercise[]>([]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
+  const [builderError, setBuilderError] = useState('');
 
   useEffect(() => { loadPrograms(); }, []);
 
@@ -541,6 +550,7 @@ function ProgramList() {
       setLibraryExercises(exRes.data || []);
       setPatients(ptRes.data || []);
       setSelectedExercises([]);
+      setBuilderError('');
       setShowBuilder(true);
     } catch {}
   }
@@ -560,6 +570,7 @@ function ProgramList() {
 
   async function handleCreateProgram(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setBuilderError('');
     const fd = new FormData(e.currentTarget);
     try {
       await api.post('/exercises/programs', {
@@ -573,7 +584,8 @@ function ProgramList() {
       setSelectedExercises([]);
       loadPrograms();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Failed to create program');
+      const msg = err instanceof ApiError ? err.message : 'Failed to create program';
+      setBuilderError(msg);
     }
   }
 
@@ -607,6 +619,9 @@ function ProgramList() {
       {showBuilder && (
         <form onSubmit={handleCreateProgram} className="card space-y-4">
           <h3 className="font-semibold">Build HEP</h3>
+          {builderError && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{builderError}</div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Patient *</label>

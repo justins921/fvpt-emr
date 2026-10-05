@@ -2,8 +2,10 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, validateSession, requirePermission, tenantScope } from '../middleware/auth';
 import { query, transaction } from '../db';
-import { Permission, AuditAction, NoteType, NoteStatus } from '../types';
+import { Permission, AuditAction, NoteType, NoteStatus, ClaimStatus, Claim, TimedCPTEntry } from '../types';
 import { logAudit } from '../services/audit';
+import { calculateUnits, isTimedCode } from '../services/eight-minute-rule';
+import { scrubClaim } from '../services/claims';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -289,6 +291,175 @@ router.post('/:id/amend', requirePermission(Permission.NOTE_AMEND), async (req: 
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
       return;
     }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Generate Claim From Signed Note ──
+// Builds a draft claim from a signed note's CPT/ICD-10 codes, applying the
+// 8-minute rule to timed codes. Charges default to $0 (no fee schedule yet).
+router.post('/:id/generate-claim', requirePermission(Permission.BILLING_CREATE), async (req: Request, res: Response) => {
+  try {
+    const noteResult = await query(
+      `SELECT cn.*,
+              cl.npi AS clinic_npi,
+              u.npi AS author_npi,
+              (SELECT i.id FROM insurance i
+                WHERE i.patient_id = cn.patient_id AND i.clinic_id = cn.clinic_id
+                  AND i.is_primary = true AND i.is_active = true
+                ORDER BY i.created_at DESC LIMIT 1) AS primary_insurance_id
+       FROM clinical_notes cn
+       JOIN clinics cl ON cl.id = cn.clinic_id
+       JOIN users u ON u.id = cn.author_id
+       WHERE cn.id = $1 AND cn.clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+
+    if (noteResult.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Note not found' });
+      return;
+    }
+
+    const note = noteResult.rows[0];
+
+    if (note.status !== NoteStatus.FINAL) {
+      res.status(400).json({ success: false, error: 'Note must be signed before generating a claim' });
+      return;
+    }
+
+    const cptCodes: string[] = (note.cpt_codes as string[] | null) || [];
+    if (cptCodes.length === 0) {
+      res.status(400).json({ success: false, error: 'Note has no CPT codes to generate a claim from' });
+      return;
+    }
+
+    const diagnosisCodes: string[] = (note.icd10_codes as string[] | null) || [];
+    if (diagnosisCodes.length === 0) {
+      res.status(400).json({ success: false, error: 'Note has no diagnosis codes to generate a claim from' });
+      return;
+    }
+
+    // Split timed vs untimed codes
+    const timedCodes = cptCodes.filter(isTimedCode);
+    const untimedCodes = cptCodes.filter((code: string) => !isTimedCode(code));
+
+    // Evenly allocate treatment minutes across timed codes
+    const totalMinutes = note.treatment_time_minutes || 0;
+    const perCodeMinutes = timedCodes.length > 0 ? Math.round(totalMinutes / timedCodes.length) : 0;
+    const timedEntries: TimedCPTEntry[] = timedCodes.map((cptCode: string) => ({
+      cptCode,
+      minutes: perCodeMinutes,
+    }));
+
+    const calculatedUnits = calculateUnits(timedEntries);
+    const unitsByCode = new Map<string, number>();
+    for (const entry of calculatedUnits.entries) {
+      unitsByCode.set(entry.cptCode, entry.units);
+    }
+
+    // Line items: timed codes use 8-minute-rule units, untimed codes are per-encounter (1 unit)
+    let lineNumber = 1;
+    const lineItems = cptCodes.map((cptCode: string) => {
+      const units = unitsByCode.has(cptCode) ? unitsByCode.get(cptCode)! : 1;
+      return {
+        lineNumber: lineNumber++,
+        cptCode,
+        modifiers: [] as string[],
+        diagnosisPointers: diagnosisCodes.map((_: string, i: number) => i + 1),
+        units,
+        chargeCents: 0,
+      };
+    });
+
+    const totalChargeCents = 0;
+    const claimNumber = `CLM-${Date.now().toString(36).toUpperCase()}`;
+
+    const billingProviderNpi =
+      note.clinic_npi && String(note.clinic_npi).length === 10 ? note.clinic_npi : '0000000000';
+    const renderingProviderNpi =
+      note.author_npi && String(note.author_npi).length === 10 ? note.author_npi : '0000000000';
+
+    const lineItemsForDb = lineItems.map((item) => ({
+      line_number: item.lineNumber,
+      cpt_code: item.cptCode,
+      modifiers: item.modifiers,
+      diagnosis_pointers: item.diagnosisPointers,
+      units: item.units,
+      charge_cents: item.chargeCents,
+      paid_cents: 0,
+      adjustment_cents: 0,
+      denial_reason: null,
+    }));
+
+    // Service date: note's signed date, falling back to creation date
+    const signedAt = note.signed_at ? new Date(note.signed_at) : null;
+    const createdAt = new Date(note.created_at);
+    const serviceDate = (signedAt || createdAt).toISOString().slice(0, 10);
+
+    const claimResult = await query(
+      `INSERT INTO claims (clinic_id, patient_id, appointment_id, note_id, insurance_id, service_date,
+        billing_provider_npi, rendering_provider_npi, diagnosis_codes, line_items,
+        total_charge_cents, claim_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING id`,
+      [
+        req.auth!.clinicId,
+        note.patient_id,
+        note.appointment_id || null,
+        note.id,
+        note.primary_insurance_id || null,
+        serviceDate,
+        billingProviderNpi,
+        renderingProviderNpi,
+        diagnosisCodes,
+        JSON.stringify(lineItemsForDb),
+        totalChargeCents,
+        claimNumber,
+      ]
+    );
+
+    const claimId = claimResult.rows[0].id;
+
+    // Skip ledger posting — total is $0 and posting zero-charge entries is noise
+
+    // Scrub the claim and store the outcome
+    const claimRow = await query(
+      `SELECT * FROM claims WHERE id = $1 AND clinic_id = $2`,
+      [claimId, req.auth!.clinicId]
+    );
+    const scrub = scrubClaim(claimRow.rows[0] as Claim);
+    scrub.warnings.push('Charges defaulted to 0 — set fee schedule amounts before submitting');
+
+    const newStatus = scrub.passed ? ClaimStatus.SCRUBBED : ClaimStatus.SCRUB_FAILED;
+    await query(
+      `UPDATE claims SET status = $3, scrub_errors = $4 WHERE id = $1 AND clinic_id = $2`,
+      [claimId, req.auth!.clinicId, newStatus, scrub.errors]
+    );
+
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.CLAIM_CREATE,
+      resourceType: 'claim',
+      resourceId: claimId,
+      details: { claimNumber, noteId: note.id, totalChargeCents },
+      req,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        claimId,
+        claimNumber,
+        units: calculatedUnits,
+        scrub: {
+          passed: scrub.passed,
+          errors: scrub.errors,
+          warnings: scrub.warnings,
+        },
+      },
+    });
+  } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

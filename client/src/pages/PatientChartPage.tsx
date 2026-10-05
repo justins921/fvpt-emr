@@ -146,6 +146,8 @@ function PatientNotes({ patientId }: { patientId: string }) {
   const [formKey, setFormKey] = useState(0);
   const [prefill, setPrefill] = useState<any>(null);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [claimResults, setClaimResults] = useState<Record<string, any>>({});
+  const [claimLoading, setClaimLoading] = useState<string | null>(null);
   const { user } = useAuth();
   const canManageTemplates = ['owner', 'admin', 'dev', 'therapist'].includes(user?.role || '');
 
@@ -229,6 +231,19 @@ function PatientNotes({ patientId }: { patientId: string }) {
       loadNotes();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to sign note');
+    }
+  }
+
+  async function generateClaim(noteId: string) {
+    setClaimLoading(noteId);
+    try {
+      const res = await api.post<any>(`/notes/${noteId}/generate-claim`);
+      const d = res?.data && typeof res.data === 'object' ? res.data : res;
+      setClaimResults(r => ({ ...r, [noteId]: d }));
+    } catch (err) {
+      setClaimResults(r => ({ ...r, [noteId]: { error: err instanceof Error ? err.message : 'Failed to generate claim' } }));
+    } finally {
+      setClaimLoading(null);
     }
   }
 
@@ -330,9 +345,54 @@ function PatientNotes({ patientId }: { patientId: string }) {
               </div>
             )}
             {note.signed_at && <div className="mt-2 text-xs text-green-600">Signed by {note.signer_first_name} {note.signer_last_name} on {new Date(note.signed_at).toLocaleString()}</div>}
+            {note.signed_at && (
+              <div className="mt-2">
+                {!claimResults[note.id] && (
+                  <button
+                    onClick={() => generateClaim(note.id)}
+                    disabled={claimLoading === note.id}
+                    className="btn-secondary text-xs disabled:opacity-50"
+                  >
+                    {claimLoading === note.id ? 'Generating...' : 'Generate Claim'}
+                  </button>
+                )}
+                {claimResults[note.id]?.error && (
+                  <div className="text-xs text-red-600 mt-1">{claimResults[note.id].error}</div>
+                )}
+                {claimResults[note.id]?.scrub && <ClaimScrubResult result={claimResults[note.id]} />}
+              </div>
+            )}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ClaimScrubResult({ result }: { result: any }) {
+  const scrub = result.scrub || {};
+  const passed = scrub.passed;
+  const errors = scrub.errors || [];
+  const warnings = scrub.warnings || [];
+  return (
+    <div className={`mt-2 rounded border p-3 text-sm ${passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+      <div className="flex items-center gap-2 font-semibold">
+        {passed ? <span className="text-green-700">✓ Scrub passed</span> : <span className="text-red-700">✗ Scrub failed</span>}
+      </div>
+      <div className="mt-1 text-xs text-slate-700 space-x-4">
+        {result.claimNumber && <span>Claim <span className="font-mono font-medium">{result.claimNumber}</span></span>}
+        {result.units != null && <span>{result.units} unit{result.units === 1 ? '' : 's'}</span>}
+      </div>
+      {errors.length > 0 && (
+        <ul className="mt-2 text-xs text-red-700 list-disc ml-5 space-y-0.5">
+          {errors.map((e: string, i: number) => <li key={i}>{e}</li>)}
+        </ul>
+      )}
+      {warnings.length > 0 && (
+        <ul className="mt-2 text-xs text-amber-700 list-disc ml-5 space-y-0.5">
+          {warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}
+        </ul>
+      )}
     </div>
   );
 }
