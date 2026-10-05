@@ -27,9 +27,8 @@ Living document — updated 2026-10-05. Lives in the repo root as ROADMAP.md.
 
 ## Built 2026-10-05 evening (pushed to staging)
 
-- [x] Internal patient notes (staff-only, pinned to chart, categories, soft-delete, out of legal record, audited) — migration 014
-- [x] Communication preferences (per-patient SMS/email opt in/out; STOP/START/HELP keyword handling in webhook; consent gate on send, bulk send, and daily-reminder cron with skip logging; staff UI + consent history + audit log; opt-in checkboxes on intake form) — migration 015
-- [ ] PENDING: run migrations 014/015 on staging — `cd server && npm run migrate` with the staging DATABASE_URL (code is deployed but the tables don't exist yet; the UI 500s until this runs)
+- [x] Internal patient notes (staff-only, pinned to chart, categories, soft-delete, out of legal record, audited) — migration 014 — QA PASS 2026-10-05
+- [x] Communication preferences (per-patient SMS/email opt in/out; STOP/START/HELP keyword handling in webhook; consent gate on send, bulk send, and daily-reminder cron with skip logging; staff UI + consent history + audit log; opt-in checkboxes on intake form) — migration 015 — QA PASS 2026-10-05
 
 ## QA rounds (2026-10-05)
 
