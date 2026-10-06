@@ -29,7 +29,7 @@ Living document — updated 2026-10-05. Lives in the repo root as ROADMAP.md.
 
 - [x] Internal patient notes (staff-only, pinned to chart, categories, soft-delete, out of legal record, audited) — migration 014 — QA PASS 2026-10-05
 - [x] Communication preferences (per-patient SMS/email opt in/out; STOP/START/HELP keyword handling in webhook; consent gate on send, bulk send, and daily-reminder cron with skip logging; staff UI + consent history + audit log; opt-in checkboxes on intake form) — migration 015 — QA PASS 2026-10-05
-- [x] HEP program templates (built on existing exercise_programs.is_template — no duplicate tables; Templates tab with list/rename/delete/use-for-patient; "Start from template" in program builder; "Save as Template" from builder and from archived programs; template assign with name override; program status updates fixed) — migration 016 (is_active soft-delete on exercise_programs)
+- [x] HEP program templates (built on existing exercise_programs.is_template — no duplicate tables; Templates tab with list/rename/delete/use-for-patient; "Start from template" in program builder; "Save as Template" from builder and from archived programs; template assign with name override; program status updates fixed) — migration 016 (is_active soft-delete on exercise_programs) — PENDING migration run + QA
 
 ## QA rounds (2026-10-05)
 
