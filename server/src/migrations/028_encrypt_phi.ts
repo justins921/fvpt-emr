@@ -5,6 +5,10 @@ export const id = '028';
 export const description = 'Encrypt existing PHI at rest (SSN, DOB, diagnoses, notes)';
 
 export async function up(): Promise<void> {
+  // Widen columns to hold encrypted values (enc:v1:... strings are ~100+ chars)
+  await query(`ALTER TABLE patients ALTER COLUMN ssn_last4 TYPE TEXT`);
+  await query(`ALTER TABLE patients ALTER COLUMN primary_diagnosis_icd10 TYPE TEXT`);
+
   // Fax webhook secret for authenticating inbound fax provider callbacks
   await query(`
     ALTER TABLE clinic_settings

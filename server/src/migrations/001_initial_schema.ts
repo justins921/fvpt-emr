@@ -79,7 +79,7 @@ export async function up(client: PoolClient): Promise<void> {
       last_name VARCHAR(100) NOT NULL,
       date_of_birth TEXT NOT NULL, -- Encrypted ISO date (enc:v1:...); decrypt via phi.ts
       gender VARCHAR(20) NOT NULL,
-      ssn_last4 VARCHAR(4),
+      ssn_last4 TEXT, -- Encrypted (enc:v1:...); decrypt via phi.ts
       email VARCHAR(255),
       phone VARCHAR(20),
       address_line1 VARCHAR(255),
@@ -95,7 +95,7 @@ export async function up(client: PoolClient): Promise<void> {
       referral_source VARCHAR(200),
       referring_provider VARCHAR(200),
       referring_provider_npi VARCHAR(10),
-      primary_diagnosis_icd10 VARCHAR(10),
+      primary_diagnosis_icd10 TEXT, -- Encrypted (enc:v1:...); decrypt via phi.ts
       secondary_diagnoses_icd10 TEXT[] DEFAULT '{}',
       precautions TEXT,
       is_active BOOLEAN NOT NULL DEFAULT true,
