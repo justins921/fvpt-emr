@@ -286,4 +286,31 @@ router.put('/:id', requirePermission(Permission.SCHEDULE_EDIT), async (req: Requ
   }
 });
 
+// Cancel appointment
+router.post('/:id/cancel', requirePermission(Permission.SCHEDULE_EDIT), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `UPDATE appointments SET status = 'cancelled', updated_at = NOW()
+       WHERE id = $1 AND clinic_id = $2 AND status NOT IN ('cancelled', 'completed')
+       RETURNING id`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Appointment not found or already cancelled/completed' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.APPOINTMENT_EDIT,
+      resourceType: 'appointment',
+      resourceId: req.params.id,
+      req,
+    });
+    res.json({ success: true, data: { id: req.params.id, status: 'cancelled' } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 export default router;

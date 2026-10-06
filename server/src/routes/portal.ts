@@ -227,7 +227,7 @@ staffRouter.get(
 
       const result = await query(
         `SELECT pu.id, pu.email, pu.is_active, pu.email_verified, pu.last_login, pu.created_at,
-                p.id as patient_id, p.first_name, p.last_name, p.mrn, p.date_of_birth
+                p.id as patient_id, p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn, p.date_of_birth
          FROM portal_users pu
          JOIN patients p ON pu.patient_id = p.id
          WHERE ${where}

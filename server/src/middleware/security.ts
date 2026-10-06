@@ -110,6 +110,12 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     method: req.method,
   });
 
+  // Postgres invalid UUID syntax → 400, not 500
+  if ((err as any).code === '22P02') {
+    res.status(400).json({ success: false, error: 'Invalid ID format' });
+    return;
+  }
+
   res.status(500).json({
     success: false,
     error: config.NODE_ENV === 'production'
