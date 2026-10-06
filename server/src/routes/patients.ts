@@ -6,6 +6,7 @@ import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
 import { getConsentPrefs, getConsentHistory, setConsent, ConsentSource } from '../services/consent';
 import { v4 as uuid } from 'uuid';
+import { encryptValue, decryptPatientRecord, decryptPatientRecords } from '../services/phi';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -82,7 +83,7 @@ router.get('/', requirePermission(Permission.PATIENT_VIEW), async (req: Request,
 
     res.json({
       success: true,
-      data: result.rows,
+      data: decryptPatientRecords(result.rows),
       meta: {
         page: pageNum,
         limit: limitNum,
@@ -113,7 +114,7 @@ router.get('/:id', requirePermission(Permission.PATIENT_VIEW), async (req: Reque
       resourceId: req.params.id,
       req,
     });
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: decryptPatientRecord(result.rows[0]) });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -211,7 +212,7 @@ router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Reque
       RETURNING id, mrn`,
       [
         req.auth!.clinicId, mrn, input.firstName, input.lastName,
-        input.dateOfBirth, input.gender, input.ssnLast4 || null,
+        encryptValue(input.dateOfBirth), input.gender, encryptValue(input.ssnLast4) || null,
         input.email || null, input.phone || null,
         input.addressLine1 || null, input.addressLine2 || null,
         input.city || null, input.state || null, input.zip || null,
@@ -220,9 +221,9 @@ router.post('/', requirePermission(Permission.PATIENT_CREATE), async (req: Reque
         input.guarantorRelationship || null,
         input.referralSource || null, input.referringProvider || null,
         input.referringProviderNpi || null,
-        input.primaryDiagnosisIcd10 || null,
-        input.secondaryDiagnosesIcd10 || [],
-        input.precautions || null,
+        encryptValue(input.primaryDiagnosisIcd10) || null,
+        (input.secondaryDiagnosesIcd10 || []).map(d => encryptValue(d)),
+        encryptValue(input.precautions) || null,
         input.smsOptIn, input.emailOptIn,
         new Date().toISOString(), new Date().toISOString(),
         'intake', 'intake',
@@ -278,10 +279,23 @@ router.put('/:id', requirePermission(Permission.PATIENT_EDIT), async (req: Reque
       precautions: 'precautions',
     };
 
+    // Fields that must be encrypted before storage
+    const encryptedFields = new Set([
+      'dateOfBirth', 'ssnLast4', 'primaryDiagnosisIcd10',
+      'secondaryDiagnosesIcd10', 'precautions',
+    ]);
+
     for (const [key, value] of Object.entries(input)) {
       if (fieldMap[key]) {
         fields.push(`${fieldMap[key]} = $${idx++}`);
-        values.push(value);
+        // Encrypt PHI fields, handle diagnosis arrays
+        if (key === 'secondaryDiagnosesIcd10' && Array.isArray(value)) {
+          values.push(value.map(d => encryptValue(d)));
+        } else if (encryptedFields.has(key)) {
+          values.push(encryptValue(value));
+        } else {
+          values.push(value);
+        }
       }
     }
 

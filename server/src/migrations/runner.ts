@@ -42,6 +42,7 @@ async function run() {
       { name: '025_portal_expansion', module: await import('./025_portal_expansion') },
       { name: '026_booking_timezone', module: await import('./026_booking_timezone') },
       { name: '027_payment_processor', module: await import('./027_payment_processor') },
+      { name: '028_encrypt_phi', module: await import('./028_encrypt_phi') },
     ];
 
     if (direction === 'up') {

@@ -77,7 +77,7 @@ export async function up(client: PoolClient): Promise<void> {
       mrn VARCHAR(50) NOT NULL,
       first_name VARCHAR(100) NOT NULL,
       last_name VARCHAR(100) NOT NULL,
-      date_of_birth DATE NOT NULL,
+      date_of_birth TEXT NOT NULL, -- Encrypted ISO date (enc:v1:...); decrypt via phi.ts
       gender VARCHAR(20) NOT NULL,
       ssn_last4 VARCHAR(4),
       email VARCHAR(255),

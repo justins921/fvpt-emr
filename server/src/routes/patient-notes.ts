@@ -4,6 +4,7 @@ import { authenticate, validateSession, requirePermission, tenantScope } from '.
 import { query } from '../db';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
+import { encryptValue, decryptNoteRecord, decryptNoteRecords } from '../services/phi';
 
 // Mounted at /api/patients/:id/notes — mergeParams gives us req.params.id (the patient).
 const router = Router({ mergeParams: true });
@@ -43,7 +44,7 @@ router.get('/', requirePermission(Permission.PATIENT_NOTE_VIEW), async (req: Req
        ORDER BY n.is_pinned DESC, n.created_at DESC`,
       [patientId, clinicId]
     );
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: decryptNoteRecords(result.rows) });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -64,7 +65,7 @@ router.post('/', requirePermission(Permission.PATIENT_NOTE_CREATE), async (req: 
       `INSERT INTO patient_notes (clinic_id, patient_id, author_id, note_text, category, is_pinned)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [clinicId, patientId, userId, input.noteText, input.category, input.isPinned]
+      [clinicId, patientId, userId, encryptValue(input.noteText), input.category, input.isPinned]
     );
     await logAudit({
       clinicId,
@@ -96,7 +97,7 @@ router.put('/:noteId', requirePermission(Permission.PATIENT_NOTE_MANAGE), async 
     const sets: string[] = [];
     const values: unknown[] = [];
     let idx = 4;
-    if (input.noteText !== undefined) { sets.push(`note_text = $${idx++}`); values.push(input.noteText); }
+    if (input.noteText !== undefined) { sets.push(`note_text = $${idx++}`); values.push(encryptValue(input.noteText)); }
     if (input.category !== undefined) { sets.push(`category = $${idx++}`); values.push(input.category); }
     if (input.isPinned !== undefined) { sets.push(`is_pinned = $${idx++}`); values.push(input.isPinned); }
     if (sets.length === 0) {
@@ -124,7 +125,7 @@ router.put('/:noteId', requirePermission(Permission.PATIENT_NOTE_MANAGE), async 
       details: { patientId, updatedFields: Object.keys(input) },
       req,
     });
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: decryptNoteRecord(result.rows[0]) });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });

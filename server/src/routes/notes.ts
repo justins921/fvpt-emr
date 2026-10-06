@@ -6,6 +6,7 @@ import { Permission, AuditAction, NoteType, NoteStatus, ClaimStatus, Claim, Time
 import { logAudit } from '../services/audit';
 import { calculateUnits, isTimedCode } from '../services/eight-minute-rule';
 import { scrubClaim } from '../services/claims';
+import { encryptValue, decryptNoteRecord, decryptNoteRecords } from '../services/phi';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -47,7 +48,7 @@ router.get('/patient/:patientId/latest', requirePermission(Permission.NOTE_VIEW)
       res.status(404).json({ success: false, error: 'No prior notes found' });
       return;
     }
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: decryptNoteRecord(result.rows[0]) });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -64,7 +65,7 @@ router.get('/patient/:patientId', requirePermission(Permission.NOTE_VIEW), async
        ORDER BY cn.created_at DESC`,
       [req.auth!.clinicId, req.params.patientId]
     );
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: decryptNoteRecords(result.rows) });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -94,7 +95,7 @@ router.get('/:id', requirePermission(Permission.NOTE_VIEW), async (req: Request,
       resourceId: req.params.id,
       req,
     });
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: decryptNoteRecord(result.rows[0]) });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
@@ -114,10 +115,10 @@ router.post('/', requirePermission(Permission.NOTE_CREATE), async (req: Request,
       [
         req.auth!.clinicId, input.patientId, input.appointmentId || null,
         req.auth!.userId, input.noteType,
-        input.subjective || null, input.objective || null,
-        input.assessment || null, input.plan || null,
-        input.evalData ? JSON.stringify(input.evalData) : null,
-        input.cptCodes || [], input.icd10Codes || [],
+        encryptValue(input.subjective) || null, encryptValue(input.objective) || null,
+        encryptValue(input.assessment) || null, encryptValue(input.plan) || null,
+        input.evalData ? encryptValue(JSON.stringify(input.evalData)) : null,
+        input.cptCodes || [], (input.icd10Codes || []).map(c => encryptValue(c)),
         input.treatmentTimeMinutes || null,
       ]
     );
@@ -172,9 +173,11 @@ router.put('/:id', requirePermission(Permission.NOTE_EDIT), async (req: Request,
        RETURNING id`,
       [
         req.params.id, req.auth!.clinicId,
-        input.subjective, input.objective, input.assessment, input.plan,
-        input.evalData ? JSON.stringify(input.evalData) : null,
-        input.cptCodes, input.icd10Codes, input.treatmentTimeMinutes,
+        encryptValue(input.subjective), encryptValue(input.objective),
+        encryptValue(input.assessment), encryptValue(input.plan),
+        input.evalData ? encryptValue(JSON.stringify(input.evalData)) : null,
+        input.cptCodes, input.icd10Codes ? input.icd10Codes.map(c => encryptValue(c)) : null,
+        input.treatmentTimeMinutes,
       ]
     );
     await logAudit({
