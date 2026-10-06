@@ -5,6 +5,12 @@ export const id = '028';
 export const description = 'Encrypt existing PHI at rest (SSN, DOB, diagnoses, notes)';
 
 export async function up(): Promise<void> {
+  // Fax webhook secret for authenticating inbound fax provider callbacks
+  await query(`
+    ALTER TABLE clinic_settings
+    ADD COLUMN IF NOT EXISTS fax_webhook_secret VARCHAR(255)
+  `);
+
   // Change date_of_birth from DATE to TEXT to hold encrypted values
   // (encrypted strings can't go in a DATE column)
   await query(`ALTER TABLE patients ALTER COLUMN date_of_birth TYPE TEXT`);

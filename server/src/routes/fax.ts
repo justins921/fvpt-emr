@@ -7,7 +7,9 @@ import { logAudit } from '../services/audit';
 
 const router = Router();
 
-// ── Public webhook endpoint (no auth) ── must be registered before the auth middleware
+// ── Public webhook endpoint — validated by shared secret, not session auth ──
+// The fax provider must include the clinic's webhook secret in the
+// X-Webhook-Secret header. Without it, the request is rejected.
 router.post('/webhook', async (req: Request, res: Response) => {
   try {
     const {
@@ -21,6 +23,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     if (!from_number || !clinic_id) {
       res.status(400).json({ success: false, error: 'from_number and clinic_id are required' });
+      return;
+    }
+
+    // Validate webhook secret against clinic settings
+    const secretResult = await query(
+      `SELECT fax_webhook_secret FROM clinic_settings WHERE clinic_id = $1`,
+      [clinic_id]
+    );
+
+    const expectedSecret = secretResult.rows[0]?.fax_webhook_secret;
+    const providedSecret = req.headers['x-webhook-secret'];
+
+    if (!expectedSecret || providedSecret !== expectedSecret) {
+      // Don't reveal whether the clinic exists
+      res.status(401).json({ success: false, error: 'Unauthorized' });
       return;
     }
 
