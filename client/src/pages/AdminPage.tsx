@@ -124,10 +124,15 @@ function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: stri
       return;
     }
     try {
+      const str = (v: FormDataEntryValue | null) => {
+        const s = typeof v === 'string' ? v.trim() : '';
+        return s || null;
+      };
       await api.put(`/users/${editing.id}`, {
-        firstName: fd.get('firstName'), lastName: fd.get('lastName'),
-        role: newRole, credential: fd.get('credential') || null,
-        npi: fd.get('npi') || null, licenseNumber: fd.get('licenseNumber') || null,
+        firstName: (fd.get('firstName') as string)?.trim(),
+        lastName: (fd.get('lastName') as string)?.trim(),
+        role: newRole, credential: str(fd.get('credential')),
+        npi: str(fd.get('npi')), licenseNumber: str(fd.get('licenseNumber')),
         isActive: fd.get('isActive') === 'on',
       });
       setEditing(null); setConfirmingRoleChange(false); loadUsers();
