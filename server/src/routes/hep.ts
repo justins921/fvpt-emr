@@ -46,6 +46,7 @@ const programSchema = z.object({
   patientId: z.string().uuid().optional().nullable(),
   description: z.string().optional().nullable(),
   isTemplate: z.boolean().optional().default(false),
+  status: z.enum(['active', 'completed', 'archived']).optional(),
   frequency: z.string().max(100).optional().nullable(),
   durationWeeks: z.number().int().positive().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -95,7 +96,7 @@ router.get('/programs', requirePermission(Permission.HEP_VIEW), async (req: Requ
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * limitNum;
 
-    let whereClause = 'hp.clinic_id = $1';
+    let whereClause = 'hp.clinic_id = $1 AND hp.is_active = true';
     const params: unknown[] = [req.auth!.clinicId];
 
     if (patient_id) {
@@ -116,6 +117,7 @@ router.get('/programs', requirePermission(Permission.HEP_VIEW), async (req: Requ
     const result = await query(
       `SELECT hp.id, hp.name, hp.description, hp.patient_id, hp.is_template,
               hp.frequency, hp.duration_weeks, hp.status, hp.sent_at, hp.created_at,
+              (SELECT COUNT(*) FROM exercise_program_items WHERE program_id = hp.id) as item_count,
               p.first_name as patient_first_name, p.last_name as patient_last_name, p.mrn,
               u.first_name as created_by_first_name, u.last_name as created_by_last_name
        FROM exercise_programs hp
@@ -151,7 +153,7 @@ router.get('/programs/:id', requirePermission(Permission.HEP_VIEW), async (req: 
        FROM exercise_programs hp
        LEFT JOIN patients p ON hp.patient_id = p.id
        LEFT JOIN users u ON hp.created_by = u.id
-       WHERE hp.id = $1 AND hp.clinic_id = $2`,
+       WHERE hp.id = $1 AND hp.clinic_id = $2 AND hp.is_active = true`,
       [req.params.id, req.auth!.clinicId]
     );
 
@@ -267,6 +269,7 @@ router.put('/programs/:id', requirePermission(Permission.HEP_EDIT), async (req: 
       description: 'description',
       patientId: 'patient_id',
       isTemplate: 'is_template',
+      status: 'status',
       frequency: 'frequency',
       durationWeeks: 'duration_weeks',
       notes: 'notes',
@@ -310,6 +313,37 @@ router.put('/programs/:id', requirePermission(Permission.HEP_EDIT), async (req: 
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
       return;
     }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Soft-delete a program or template
+router.delete('/programs/:id', requirePermission(Permission.HEP_DELETE), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `UPDATE exercise_programs SET is_active = false, updated_at = NOW()
+       WHERE id = $1 AND clinic_id = $2 AND is_active = true
+       RETURNING id, name, is_template`,
+      [req.params.id, req.auth!.clinicId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Program not found' });
+      return;
+    }
+
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.HEP_PROGRAM_DELETE,
+      resourceType: 'hep_program',
+      resourceId: req.params.id,
+      details: { name: result.rows[0].name, isTemplate: result.rows[0].is_template },
+      req,
+    });
+
+    res.json({ success: true, data: { id: req.params.id } });
+  } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -415,11 +449,14 @@ router.delete('/programs/:id/items/:itemId', requirePermission(Permission.HEP_ED
 // Assign template to patient (copy template into a patient-specific program)
 router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), async (req: Request, res: Response) => {
   try {
-    const { patientId } = z.object({ patientId: z.string().uuid() }).parse(req.body);
+    const { patientId, name } = z.object({
+      patientId: z.string().uuid(),
+      name: z.string().min(1).max(255).optional(),
+    }).parse(req.body);
 
     // Verify the source program is a template and belongs to this clinic
     const templateResult = await query(
-      `SELECT * FROM exercise_programs WHERE id = $1 AND clinic_id = $2 AND is_template = true`,
+      `SELECT * FROM exercise_programs WHERE id = $1 AND clinic_id = $2 AND is_template = true AND is_active = true`,
       [req.params.id, req.auth!.clinicId]
     );
     if (templateResult.rows.length === 0) {
@@ -448,7 +485,7 @@ router.post('/programs/:id/assign', requirePermission(Permission.HEP_CREATE), as
         ) VALUES ($1,$2,$3,$4,false,$5,$6,$7,$8,$9)
         RETURNING id`,
         [
-          req.auth!.clinicId, template.name, template.description,
+          req.auth!.clinicId, name || template.name, template.description,
           patientId, template.frequency, template.duration_weeks,
           template.notes, req.auth!.userId, req.params.id,
         ]

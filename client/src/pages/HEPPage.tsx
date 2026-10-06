@@ -22,11 +22,14 @@ interface Exercise {
 
 interface Program {
   id: string;
-  patient_id: string;
+  patient_id: string | null;
   patient_first_name: string;
   patient_last_name: string;
   name: string;
+  description?: string;
   status: string;
+  is_template: boolean;
+  item_count: number;
   exercise_count: number;
   assigned_by_name: string;
   created_at: string;
@@ -42,7 +45,7 @@ interface ProgramExercise {
   notes: string;
 }
 
-type Tab = 'exercises' | 'programs';
+type Tab = 'exercises' | 'programs' | 'templates';
 
 const BODY_REGIONS = [
   { label: 'Cervical', value: 'cervical' },
@@ -85,7 +88,7 @@ export default function HEPPage() {
         </div>
       </div>
       <div className="flex gap-1 border-b">
-        {([['exercises', 'Exercises'], ['programs', 'Programs']] as const).map(([key, label]) => (
+        {([['exercises', 'Exercises'], ['programs', 'Programs'], ['templates', 'Templates']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -95,7 +98,7 @@ export default function HEPPage() {
           </button>
         ))}
       </div>
-      {tab === 'exercises' ? <ExerciseLibrary /> : <ProgramList />}
+      {tab === 'exercises' ? <ExerciseLibrary /> : tab === 'programs' ? <ProgramList /> : <TemplateList />}
     </div>
   );
 }
@@ -540,29 +543,85 @@ function ProgramList() {
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
   const [builderError, setBuilderError] = useState('');
+  const [templates, setTemplates] = useState<Program[]>([]);
+  const [templateStarting, setTemplateStarting] = useState(false);
+  const [confirmMakeTemplate, setConfirmMakeTemplate] = useState<string | null>(null);
+  const [templateSaveMsg, setTemplateSaveMsg] = useState('');
 
   useEffect(() => { loadPrograms(); }, []);
 
   async function loadPrograms() {
     setLoading(true);
     try {
-      const res = await api.get<any>('/exercises/programs');
+      const res = await api.get<any>('/exercises/programs?is_template=false');
       setPrograms(res.data || []);
     } catch {} finally { setLoading(false); }
   }
 
   async function openBuilder() {
     try {
-      const [exRes, ptRes] = await Promise.all([
+      const [exRes, ptRes, tplRes] = await Promise.all([
         api.get<any>('/exercises?limit=500'),
         api.get<any>('/patients?limit=200'),
+        api.get<any>('/exercises/programs?is_template=true'),
       ]);
       setLibraryExercises(exRes.data || []);
       setPatients(ptRes.data || []);
+      setTemplates(tplRes.data || []);
       setSelectedExercises([]);
       setBuilderError('');
+      setTemplateSaveMsg('');
       setShowBuilder(true);
     } catch {}
+  }
+
+  async function startFromTemplate(templateId: string) {
+    if (!templateId) return;
+    setTemplateStarting(true);
+    setBuilderError('');
+    try {
+      const res = await api.get<any>('/exercises/programs/' + templateId);
+      const items = res.data?.items || res.data?.data?.items || [];
+      setSelectedExercises(items.map((it: any, i: number) => ({
+        exercise_id: it.exercise_id,
+        name: it.exercise_name || 'Exercise',
+        sets: it.sets || 3,
+        reps: it.reps || 10,
+        hold_seconds: it.hold_seconds || 0,
+        order: i + 1,
+        notes: it.notes || '',
+      })));
+    } catch (err) {
+      setBuilderError(err instanceof ApiError ? err.message : 'Failed to load template');
+    } finally { setTemplateStarting(false); }
+  }
+
+  async function saveBuilderAsTemplate(name: string) {
+    if (!name.trim() || selectedExercises.length === 0) return;
+    setBuilderError('');
+    setTemplateSaveMsg('');
+    try {
+      await api.post('/exercises/programs', {
+        name: name.trim(),
+        isTemplate: true,
+        items: selectedExercises.map(({ exercise_id, sets, reps, hold_seconds, order, notes }) => ({
+          exerciseId: exercise_id, sortOrder: order, sets, reps, holdSeconds: hold_seconds, notes,
+        })),
+      });
+      setTemplateSaveMsg('Template saved. Find it under the Templates tab.');
+    } catch (err) {
+      setBuilderError(err instanceof ApiError ? err.message : 'Failed to save template');
+    }
+  }
+
+  async function convertToTemplate(id: string) {
+    try {
+      await api.put('/exercises/programs/' + id, { isTemplate: true, patientId: null });
+      setConfirmMakeTemplate(null);
+      loadPrograms();
+    } catch (err) {
+      setBuilderError(err instanceof ApiError ? err.message : 'Failed to save as template');
+    }
   }
 
   function addExercise(ex: Exercise) {
@@ -632,6 +691,9 @@ function ProgramList() {
           {builderError && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{builderError}</div>
           )}
+          {templateSaveMsg && (
+            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{templateSaveMsg}</div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Patient *</label>
@@ -645,6 +707,24 @@ function ProgramList() {
               <input name="name" required className="input" placeholder="e.g., Post-op Knee Phase 1" />
             </div>
           </div>
+
+          {templates.length > 0 && (
+            <div>
+              <label className="label">Start from template</label>
+              <select
+                className="input max-w-md"
+                defaultValue=""
+                disabled={templateStarting}
+                onChange={e => startFromTemplate(e.target.value)}
+              >
+                <option value="">Select a template to pre-fill exercises...</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.item_count ?? 0} exercises)</option>
+                ))}
+              </select>
+              {templateStarting && <span className="text-xs text-slate-500 ml-2">Loading template...</span>}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
@@ -688,6 +768,19 @@ function ProgramList() {
 
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setShowBuilder(false)} className="btn-secondary">Cancel</button>
+            <button
+              type="button"
+              disabled={selectedExercises.length === 0}
+              onClick={e => {
+                const form = (e.currentTarget as HTMLElement).closest('form') as HTMLFormElement;
+                const nameInput = form.querySelector('input[name="name"]') as HTMLInputElement;
+                saveBuilderAsTemplate(nameInput?.value || '');
+              }}
+              className="btn-secondary"
+              title="Save the current exercise selection as a reusable template"
+            >
+              Save as Template
+            </button>
             <button type="submit" disabled={selectedExercises.length === 0} className="btn-primary">Create Program</button>
           </div>
         </form>
@@ -717,11 +810,20 @@ function ProgramList() {
                   <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColor(p.status)}>{p.status}</span></td>
                   <td className="px-4 py-3 text-slate-500">{new Date(p.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      {p.status === 'active' && <button onClick={() => updateProgramStatus(p.id, 'archived')} className="text-xs text-yellow-600 underline">Archive</button>}
-                      {p.status === 'archived' && <button onClick={() => updateProgramStatus(p.id, 'active')} className="text-xs text-green-600 underline">Reactivate</button>}
-                      {p.status !== 'completed' && <button onClick={() => updateProgramStatus(p.id, 'completed')} className="text-xs text-blue-600 underline">Complete</button>}
-                    </div>
+                    {confirmMakeTemplate === p.id ? (
+                      <div className="flex gap-2 items-center" aria-live="polite">
+                        <span className="text-xs text-slate-600">Save as template?</span>
+                        <button onClick={() => convertToTemplate(p.id)} className="text-xs text-primary-600 underline font-medium">Confirm</button>
+                        <button onClick={() => setConfirmMakeTemplate(null)} className="text-xs text-slate-500 underline">Back</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        {p.status === 'active' && <button onClick={() => updateProgramStatus(p.id, 'archived')} className="text-xs text-yellow-600 underline">Archive</button>}
+                        {p.status === 'archived' && <button onClick={() => setConfirmMakeTemplate(p.id)} className="text-xs text-primary-600 underline">Save as Template</button>}
+                        {p.status === 'archived' && <button onClick={() => updateProgramStatus(p.id, 'active')} className="text-xs text-green-600 underline">Reactivate</button>}
+                        {p.status !== 'completed' && <button onClick={() => updateProgramStatus(p.id, 'completed')} className="text-xs text-blue-600 underline">Complete</button>}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -729,6 +831,212 @@ function ProgramList() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function TemplateList() {
+  const [templates, setTemplates] = useState<Program[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState<Program | null>(null);
+
+  useEffect(() => { loadTemplates(); }, []);
+
+  async function loadTemplates() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get<any>('/exercises/programs?is_template=true');
+      setTemplates(res.data || []);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load templates');
+    } finally { setLoading(false); }
+  }
+
+  async function handleRename(id: string) {
+    if (!renameValue.trim()) return;
+    try {
+      await api.put('/exercises/programs/' + id, { name: renameValue.trim() });
+      setRenaming(null);
+      loadTemplates();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to rename template');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await api.delete('/exercises/programs/' + id);
+      setConfirmDelete(null);
+      loadTemplates();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to delete template');
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-slate-500">
+          {templates.length} template{templates.length !== 1 ? 's' : ''} — reusable exercise sets for frequently prescribed programs
+        </span>
+      </div>
+
+      {error && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>
+      ) : templates.length === 0 ? (
+        <div className="card text-center text-slate-500 py-8">
+          No templates yet. Build a program and click "Save as Template", or convert an existing program from the Programs tab.
+        </div>
+      ) : (
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="text-left px-4 py-3">Name</th>
+                <th className="text-left px-4 py-3">Exercises</th>
+                <th className="text-left px-4 py-3">Created</th>
+                <th className="text-left px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {templates.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    {renaming === t.id ? (
+                      <div className="flex gap-2 items-center">
+                        <input
+                          value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                          className="input !py-1 text-sm" autoFocus
+                          onKeyDown={e => { if (e.key === 'Enter') handleRename(t.id); if (e.key === 'Escape') setRenaming(null); }}
+                        />
+                        <button onClick={() => handleRename(t.id)} className="text-xs text-green-600 underline">Save</button>
+                        <button onClick={() => setRenaming(null)} className="text-xs text-slate-500 underline">Cancel</button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="font-medium">{t.name}</div>
+                        {t.description && <div className="text-xs text-slate-500">{t.description}</div>}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">{t.item_count ?? t.exercise_count ?? 0}</td>
+                  <td className="px-4 py-3 text-slate-500">{new Date(t.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3">
+                    {confirmDelete === t.id ? (
+                      <div className="flex gap-2 items-center" aria-live="polite">
+                        <span className="text-xs text-red-700">Delete this template?</span>
+                        <button onClick={() => handleDelete(t.id)} className="text-xs text-red-600 underline font-medium">Confirm</button>
+                        <button onClick={() => setConfirmDelete(null)} className="text-xs text-slate-500 underline">Back</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setAssigning(t)} className="text-xs text-primary-600 underline">Use for patient</button>
+                        <button onClick={() => { setRenaming(t.id); setRenameValue(t.name); }} className="text-xs text-slate-600 underline">Rename</button>
+                        <button onClick={() => setConfirmDelete(t.id)} className="text-xs text-red-500 underline">Delete</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {assigning && <AssignTemplateModal template={assigning} onClose={() => setAssigning(null)} />}
+    </div>
+  );
+}
+
+function AssignTemplateModal({ template, onClose }: { template: Program; onClose: () => void }) {
+  const [patients, setPatients] = useState<any[]>([]);
+  const [query, setQuery] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+  const [programName, setProgramName] = useState(template.name);
+  const [assigning, setAssigning] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    api.get<any>('/patients?limit=200').then(res => setPatients(res.data || [])).catch(() => {});
+  }, []);
+
+  const filtered = query
+    ? patients.filter((p: any) => (p.first_name + ' ' + p.last_name).toLowerCase().includes(query.toLowerCase()))
+    : patients;
+
+  async function handleAssign() {
+    if (!selectedPatient) return;
+    setAssigning(true);
+    setError('');
+    try {
+      await api.post('/exercises/programs/' + template.id + '/assign', {
+        patientId: selectedPatient.id,
+        name: programName.trim() || template.name,
+      });
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create program from template');
+    } finally { setAssigning(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="card w-full max-w-md space-y-3">
+        <h3 className="font-semibold">Use template: {template.name}</h3>
+        {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+        {done ? (
+          <div className="space-y-3">
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Program created for {selectedPatient?.first_name} {selectedPatient?.last_name}.
+            </p>
+            <div className="flex justify-end">
+              <button type="button" onClick={onClose} className="btn-primary">Done</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="label">Program name</label>
+              <input value={programName} onChange={e => setProgramName(e.target.value)} className="input" />
+            </div>
+            <div>
+              <label className="label">Patient *</label>
+              <input
+                type="search" placeholder="Search patient..." value={query}
+                onChange={e => setQuery(e.target.value)} className="input mb-2"
+              />
+              <div className="border rounded-lg max-h-40 overflow-y-auto divide-y">
+                {filtered.slice(0, 20).map((p: any) => (
+                  <button
+                    key={p.id} type="button"
+                    onClick={() => setSelectedPatient(p)}
+                    className={'w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ' + (selectedPatient?.id === p.id ? 'bg-primary-50 font-medium' : '')}
+                  >
+                    {p.last_name}, {p.first_name}
+                  </button>
+                ))}
+                {filtered.length === 0 && <div className="p-3 text-sm text-slate-400 text-center">No patients found</div>}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+              <button onClick={handleAssign} disabled={!selectedPatient || assigning} className="btn-primary">
+                {assigning ? 'Creating...' : 'Create Program'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

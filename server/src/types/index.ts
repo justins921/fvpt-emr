@@ -706,6 +706,7 @@ export enum AuditAction {
   HEP_PROGRAM_CREATE = 'hep.program_create',
   HEP_PROGRAM_EDIT = 'hep.program_edit',
   HEP_PROGRAM_ASSIGN = 'hep.program_assign',
+  HEP_PROGRAM_DELETE = 'hep.program_delete',
 
   // Plan of Care
   POC_CREATE = 'poc.create',
