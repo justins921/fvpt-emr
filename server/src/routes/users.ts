@@ -9,6 +9,39 @@ import { logAudit } from '../services/audit';
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
 
+// Human-readable field names for validation errors
+const FIELD_LABELS: Record<string, string> = {
+  username: 'Username',
+  password: 'Password',
+  firstName: 'First name',
+  lastName: 'Last name',
+  role: 'Role',
+  credential: 'Credential',
+  npi: 'NPI',
+  licenseNumber: 'License number',
+  isActive: 'Active status',
+};
+
+function formatZodError(err: z.ZodError): string {
+  const first = err.issues[0];
+  if (!first) return 'Invalid input. Please check the form and try again.';
+  const field = String(first.path[0] ?? '');
+  const label = FIELD_LABELS[field] || field || 'Field';
+  if (first.code === 'invalid_type') {
+    return `${label}: expected ${first.expected}, received ${first.received}.`;
+  }
+  if (first.code === 'too_small') {
+    return `${label}: must not be empty.`;
+  }
+  if (first.code === 'too_big') {
+    return `${label}: too long (max ${first.maximum} characters).`;
+  }
+  if (first.code === 'invalid_enum_value') {
+    return `${label}: invalid value.`;
+  }
+  return `${label}: ${first.message}`;
+}
+
 const VALID_CREDENTIALS = ['PT', 'DPT', 'PTA', 'ATC', 'OT', 'SLP', 'MD', 'DO', 'NP', 'PA', 'Office'] as const;
 
 const createUserSchema = z.object({
@@ -18,8 +51,8 @@ const createUserSchema = z.object({
   lastName: z.string().min(1).max(100),
   role: z.nativeEnum(Role),
   credential: z.enum(VALID_CREDENTIALS).optional().nullable(),
-  npi: z.string().max(10).optional(),
-  licenseNumber: z.string().max(50).optional(),
+  npi: z.string().max(10).optional().nullable(),
+  licenseNumber: z.string().max(50).optional().nullable(),
 });
 
 // List users
@@ -63,7 +96,7 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
     res.status(201).json({ success: true, data: { id: result.rows[0].id } });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      res.status(400).json({ success: false, error: formatZodError(err), details: err.errors });
       return;
     }
     const pgErr = err as { code?: string };
@@ -193,8 +226,8 @@ router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request,
       lastName: z.string().min(1).max(100).optional(),
       role: z.nativeEnum(Role).optional(),
       credential: z.enum(VALID_CREDENTIALS).optional().nullable(),
-      npi: z.string().max(10).optional(),
-      licenseNumber: z.string().max(50).optional(),
+      npi: z.string().max(10).optional().nullable(),
+      licenseNumber: z.string().max(50).optional().nullable(),
       isActive: z.boolean().optional(),
     });
     const input = updateSchema.parse(req.body);
@@ -269,7 +302,7 @@ router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request,
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      res.status(400).json({ success: false, error: formatZodError(err), details: err.errors });
       return;
     }
     res.status(500).json({ success: false, error: 'Internal server error' });
