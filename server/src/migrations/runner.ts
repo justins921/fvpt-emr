@@ -40,6 +40,7 @@ async function run() {
       { name: '023_appeal_drafts', module: await import('./023_appeal_drafts') },
       { name: '024_online_booking', module: await import('./024_online_booking') },
       { name: '025_portal_expansion', module: await import('./025_portal_expansion') },
+      { name: '026_booking_timezone', module: await import('./026_booking_timezone') },
     ];
 
     if (direction === 'up') {

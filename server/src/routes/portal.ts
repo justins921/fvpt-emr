@@ -446,8 +446,9 @@ staffRouter.get(
   }
 );
 
-// Mount all staff routes under the main router
-router.use('/', staffRouter);
+// NOTE: staffRouter is mounted AFTER the public routes below.
+// Mounting it here would let its auth middleware intercept /patient/login.
+
 
 // ============================================================================
 //  PATIENT ENDPOINTS — portal JWT auth (separate from staff auth)
@@ -804,5 +805,9 @@ patientRouter.get('/billing', async (req: Request, res: Response) => {
 
 // Mount patient routes
 router.use('/patient', patientRouter);
+
+// Mount staff routes LAST — the staff auth middleware would otherwise
+// intercept the public /patient/login route defined above.
+router.use('/', staffRouter);
 
 export default router;

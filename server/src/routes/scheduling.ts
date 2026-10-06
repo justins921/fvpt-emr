@@ -8,7 +8,7 @@ import { logAudit } from '../services/audit';
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
 
-const appointmentSchema = z.object({
+const appointmentSchemaBase = z.object({
   patientId: z.string().uuid(),
   therapistId: z.string().uuid(),
   locationId: z.string().uuid().optional().nullable(),
@@ -17,6 +17,19 @@ const appointmentSchema = z.object({
   appointmentType: z.nativeEnum(AppointmentType),
   notes: z.string().optional().nullable(),
   recurringRule: z.string().optional().nullable(),
+});
+
+const appointmentSchema = appointmentSchemaBase.refine((d) => new Date(d.endTime) > new Date(d.startTime), {
+  message: 'End time must be after start time',
+}).refine((d) => new Date(d.startTime).getTime() > Date.now() - 60000, {
+  message: 'Cannot schedule appointments in the past',
+});
+
+const appointmentUpdateSchema = appointmentSchemaBase.partial().refine((d) => {
+  if (d.startTime && d.endTime) return new Date(d.endTime) > new Date(d.startTime);
+  return true;
+}, {
+  message: 'End time must be after start time',
 });
 
 // Get appointments for date range
@@ -220,7 +233,7 @@ router.patch('/:id/status', requirePermission(Permission.SCHEDULE_EDIT), async (
 // Update full appointment
 router.put('/:id', requirePermission(Permission.SCHEDULE_EDIT), async (req: Request, res: Response) => {
   try {
-    const input = appointmentSchema.partial().parse(req.body);
+    const input = appointmentUpdateSchema.parse(req.body);
     const fields: string[] = [];
     const values: unknown[] = [];
     let idx = 3;
