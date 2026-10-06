@@ -52,6 +52,38 @@ function monthStatusClasses(status: string) {
 }
 
 export default function SchedulePage() {
+  const [exportingAppts, setExportingAppts] = useState(false);
+  const [exportApptError, setExportApptError] = useState('');
+
+  async function handleExportAppointments() {
+    setExportingAppts(true);
+    setExportApptError('');
+    try {
+      // Export the currently visible range based on view
+      const start = new Date(currentDate);
+      const end = new Date(currentDate);
+      if (view === 'day') {
+        end.setDate(end.getDate() + 1);
+      } else if (view === 'week') {
+        start.setDate(start.getDate() - start.getDay());
+        end.setDate(end.getDate() + (6 - end.getDay()) + 1);
+      } else {
+        start.setDate(1);
+        end.setMonth(end.getMonth() + 1);
+        end.setDate(1);
+      }
+      const fmt = (d: Date) => d.toISOString().substring(0, 10);
+      const fname = `appointments_${fmt(start)}_to_${fmt(end)}.csv`;
+      await api.downloadFile(
+        `/exports/appointments/csv?fromDate=${fmt(start)}&toDate=${fmt(end)}`,
+        fname
+      );
+    } catch (err) {
+      setExportApptError('Export failed. Please try again.');
+    } finally {
+      setExportingAppts(false);
+    }
+  }
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -252,6 +284,9 @@ export default function SchedulePage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-xl sm:text-2xl font-bold flex-1 min-w-0">Schedule</h1>
+          <button onClick={handleExportAppointments} disabled={exportingAppts} className="btn-secondary text-sm">
+            {exportingAppts ? 'Exporting...' : 'Export CSV'}
+          </button>
           <button onClick={() => setShowNewForm(!showNewForm)} className="btn-primary text-sm">+ New</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -265,6 +300,12 @@ export default function SchedulePage() {
             ))}
           </div>
         </div>
+
+        {exportApptError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+            {exportApptError}
+          </div>
+        )}
 
         {/* Location filter (shown when clinic has multiple locations) */}
         {locations.length > 1 && (

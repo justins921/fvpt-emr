@@ -115,6 +115,31 @@ class ApiClient {
   upload<T = unknown>(path: string, formData: FormData) {
     return this.request<T>(path, { method: 'POST', body: formData });
   }
+
+  /** Download a file (CSV/JSON export) — saves via a temporary anchor. */
+  async downloadFile(path: string, filename: string) {
+    const headers: Record<string, string> = {};
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new ApiError(response.status, err.error || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 export class ApiError extends Error {

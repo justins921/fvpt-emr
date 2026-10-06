@@ -206,6 +206,94 @@ const APPOINTMENT_FIELD_MAP: FieldMapping = {
   'Client ID': 'mrn',
 };
 
+const INSURANCE_FIELD_MAP: FieldMapping = {
+  'MRN': 'mrn',
+  'Medical Record Number': 'mrn',
+  'Client ID': 'mrn',
+  'Account #': 'mrn',
+  'mrn': 'mrn',
+  'Patient First Name': 'patient_first_name',
+  'Patient Last Name': 'patient_last_name',
+  'First Name': 'patient_first_name',
+  'Last Name': 'patient_last_name',
+  'Date of Birth': 'date_of_birth',
+  'DOB': 'date_of_birth',
+  'dob': 'date_of_birth',
+  'Payer': 'payer_name',
+  'Insurance': 'payer_name',
+  'Insurance Company': 'payer_name',
+  'Insurance Name': 'payer_name',
+  'Payer Name': 'payer_name',
+  'payer_name': 'payer_name',
+  'Plan Name': 'plan_name',
+  'Plan': 'plan_name',
+  'Member ID': 'member_id',
+  'Policy Number': 'member_id',
+  'Policy #': 'member_id',
+  'MemberID': 'member_id',
+  'member_id': 'member_id',
+  'Group Number': 'group_number',
+  'Group #': 'group_number',
+  'Group': 'group_number',
+  'Subscriber Name': 'subscriber_name',
+  'Subscriber': 'subscriber_name',
+  'Subscriber DOB': 'subscriber_dob',
+  'Subscriber Date of Birth': 'subscriber_dob',
+  'Relationship': 'subscriber_relationship',
+  'Subscriber Relationship': 'subscriber_relationship',
+  'Coverage Start': 'coverage_start',
+  'Effective Date': 'coverage_start',
+  'Start Date': 'coverage_start',
+  'Coverage End': 'coverage_end',
+  'Termination Date': 'coverage_end',
+  'End Date': 'coverage_end',
+  'Type': 'insurance_type',
+  'Insurance Type': 'insurance_type',
+  'Primary': 'is_primary',
+  'Is Primary': 'is_primary',
+};
+
+const AUTHORIZATION_FIELD_MAP: FieldMapping = {
+  'MRN': 'mrn',
+  'Medical Record Number': 'mrn',
+  'Client ID': 'mrn',
+  'Account #': 'mrn',
+  'mrn': 'mrn',
+  'Patient First Name': 'patient_first_name',
+  'Patient Last Name': 'patient_last_name',
+  'First Name': 'patient_first_name',
+  'Last Name': 'patient_last_name',
+  'Date of Birth': 'date_of_birth',
+  'DOB': 'date_of_birth',
+  'Payer': 'payer_name',
+  'Insurance': 'payer_name',
+  'Insurance Company': 'payer_name',
+  'Payer Name': 'payer_name',
+  'payer_name': 'payer_name',
+  'Auth Number': 'authorization_number',
+  'Authorization Number': 'authorization_number',
+  'Authorization #': 'authorization_number',
+  'Auth #': 'authorization_number',
+  'authorization_number': 'authorization_number',
+  'Visits Authorized': 'authorized_visits',
+  'Authorized Visits': 'authorized_visits',
+  'Visits': 'authorized_visits',
+  'Number of Visits': 'authorized_visits',
+  'Visits Used': 'used_visits',
+  'Used Visits': 'used_visits',
+  'Start Date': 'start_date',
+  'Auth Start': 'start_date',
+  'Effective Date': 'start_date',
+  'End Date': 'end_date',
+  'Auth End': 'end_date',
+  'Expiration Date': 'end_date',
+  'Expiry': 'end_date',
+  'Status': 'status',
+  'Auth Status': 'status',
+  'Notes': 'notes',
+  'Auth Notes': 'notes',
+};
+
 function normalizeDate(val: string): string | null {
   if (!val) return null;
   // Try ISO format first
@@ -302,12 +390,16 @@ router.post('/preview', requirePermission(Permission.DATA_IMPORT), async (req: R
       res.status(400).json({ success: false, error: 'CSV data is required' });
       return;
     }
-    if (!['patients', 'appointments'].includes(type)) {
-      res.status(400).json({ success: false, error: 'Import type must be "patients" or "appointments"' });
+    if (!['patients', 'appointments', 'insurance', 'authorizations'].includes(type)) {
+      res.status(400).json({ success: false, error: 'Import type must be "patients", "appointments", "insurance", or "authorizations"' });
       return;
     }
 
-    const fieldMap = type === 'patients' ? PATIENT_FIELD_MAP : APPOINTMENT_FIELD_MAP;
+    const fieldMap =
+      type === 'patients' ? PATIENT_FIELD_MAP :
+      type === 'appointments' ? APPOINTMENT_FIELD_MAP :
+      type === 'insurance' ? INSURANCE_FIELD_MAP :
+      AUTHORIZATION_FIELD_MAP;
     const rows = parseCSV(csv);
     if (rows.length === 0) {
       res.status(400).json({ success: false, error: 'No data rows found in CSV' });
@@ -332,6 +424,34 @@ router.post('/preview', requirePermission(Permission.DATA_IMPORT), async (req: R
           errors.push({ row: i + 2, reason: 'Missing first or last name' });
         } else if (mapped.date_of_birth && !normalizeDate(mapped.date_of_birth)) {
           errors.push({ row: i + 2, reason: `Invalid date format: "${mapped.date_of_birth}"` });
+        } else {
+          validCount++;
+        }
+      } else if (type === 'insurance') {
+        const hasPatient = mapped.mrn || (mapped.patient_first_name && mapped.patient_last_name);
+        if (!hasPatient) {
+          errors.push({ row: i + 2, reason: 'Missing patient identifier (MRN or name)' });
+        } else if (!mapped.payer_name) {
+          errors.push({ row: i + 2, reason: 'Missing payer/insurance name' });
+        } else if (!mapped.member_id) {
+          errors.push({ row: i + 2, reason: 'Missing member ID' });
+        } else if (mapped.subscriber_dob && !normalizeDate(mapped.subscriber_dob)) {
+          errors.push({ row: i + 2, reason: `Invalid subscriber DOB: "${mapped.subscriber_dob}"` });
+        } else if (mapped.coverage_start && !normalizeDate(mapped.coverage_start)) {
+          errors.push({ row: i + 2, reason: `Invalid coverage start date: "${mapped.coverage_start}"` });
+        } else {
+          validCount++;
+        }
+      } else if (type === 'authorizations') {
+        const hasPatient = mapped.mrn || (mapped.patient_first_name && mapped.patient_last_name);
+        if (!hasPatient) {
+          errors.push({ row: i + 2, reason: 'Missing patient identifier (MRN or name)' });
+        } else if (!mapped.authorized_visits || isNaN(parseInt(mapped.authorized_visits, 10))) {
+          errors.push({ row: i + 2, reason: 'Missing or invalid visits authorized' });
+        } else if (!mapped.start_date || !normalizeDate(mapped.start_date)) {
+          errors.push({ row: i + 2, reason: `Missing or invalid start date: "${mapped.start_date || ''}"` });
+        } else if (mapped.end_date && !normalizeDate(mapped.end_date)) {
+          errors.push({ row: i + 2, reason: `Invalid end date: "${mapped.end_date}"` });
         } else {
           validCount++;
         }
@@ -693,6 +813,347 @@ router.post('/appointments', requirePermission(Permission.DATA_IMPORT), async (r
   }
 });
 
+
+// ── Shared patient matching for insurance/auth imports ──
+async function buildPatientMatcher(
+  client: { query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
+  clinicId: string
+): Promise<{
+  byMrn: Map<string, string>;
+  byNameDob: Map<string, string>;
+  byName: Map<string, string>;
+  dobById: Map<string, string>;
+}> {
+  const res = await client.query(
+    `SELECT id, mrn, LOWER(first_name) as first_name, LOWER(last_name) as last_name,
+            date_of_birth::text as dob
+     FROM patients WHERE clinic_id = $1`,
+    [clinicId]
+  );
+  const byMrn = new Map<string, string>();
+  const byNameDob = new Map<string, string>();
+  const byName = new Map<string, string>();
+  const dobById = new Map<string, string>();
+  for (const p of res.rows) {
+    const id = p.id as string;
+    if (p.mrn) byMrn.set(String(p.mrn).toLowerCase(), id);
+    byName.set(`${p.first_name}|${p.last_name}`, id);
+    if (p.dob) {
+      byNameDob.set(`${p.first_name}|${p.last_name}|${p.dob}`, id);
+      dobById.set(id, p.dob as string);
+    }
+  }
+  return { byMrn, byNameDob, byName, dobById };
+}
+
+function matchPatient(
+  mapped: Record<string, string>,
+  matcher: { byMrn: Map<string, string>; byNameDob: Map<string, string>; byName: Map<string, string> },
+  dob?: string | null
+): string | null {
+  if (mapped.mrn) {
+    const hit = matcher.byMrn.get(mapped.mrn.toLowerCase());
+    if (hit) return hit;
+  }
+  const first = (mapped.patient_first_name || '').toLowerCase();
+  const last = (mapped.patient_last_name || '').toLowerCase();
+  if (first && last) {
+    if (dob) {
+      const hit = matcher.byNameDob.get(`${first}|${last}|${dob}`);
+      if (hit) return hit;
+    }
+    const hit = matcher.byName.get(`${first}|${last}`);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function normalizeInsuranceType(val: string): 'primary' | 'secondary' {
+  const v = val.toLowerCase().trim();
+  if (v.includes('second') || v === '2' || v.includes('sec')) return 'secondary';
+  return 'primary';
+}
+
+function normalizeAuthStatus(val: string): string {
+  const v = val.toLowerCase().trim();
+  if (v.includes('expir')) return 'expired';
+  if (v.includes('exhaust')) return 'exhausted';
+  if (v.includes('pend')) return 'pending';
+  if (v.includes('den')) return 'denied';
+  return 'active';
+}
+
+// ── Import insurance records ──
+router.post('/insurance', requirePermission(Permission.DATA_IMPORT), async (req: Request, res: Response) => {
+  try {
+    const { csv, duplicateHandling = 'skip' } = req.body;
+    const clinicId = req.auth!.clinicId;
+
+    if (!csv || typeof csv !== 'string') {
+      res.status(400).json({ success: false, error: 'CSV data is required' });
+      return;
+    }
+
+    const rows = parseCSV(csv);
+    if (rows.length === 0) {
+      res.status(400).json({ success: false, error: 'No data rows found' });
+      return;
+    }
+
+    const result = await transaction<ImportResult>(async (client) => {
+      let imported = 0;
+      let skipped = 0;
+      let updated = 0;
+      const errors: Array<{ row: number; reason: string }> = [];
+      const matcher = await buildPatientMatcher(client, clinicId);
+
+      for (let i = 0; i < rows.length; i++) {
+        const mapped = mapRow(rows[i], INSURANCE_FIELD_MAP);
+
+        const dob = mapped.date_of_birth ? normalizeDate(mapped.date_of_birth) : null;
+        const patientId = matchPatient(mapped, matcher, dob);
+        if (!patientId) {
+          errors.push({ row: i + 2, reason: `Patient not found: "${mapped.mrn || (mapped.patient_first_name + ' ' + mapped.patient_last_name)}". Import patients first.` });
+          continue;
+        }
+        if (!mapped.payer_name || !mapped.member_id) {
+          errors.push({ row: i + 2, reason: 'Missing payer name or member ID' });
+          continue;
+        }
+
+        const subDob = mapped.subscriber_dob ? normalizeDate(mapped.subscriber_dob) : null;
+        if (mapped.subscriber_dob && !subDob) {
+          errors.push({ row: i + 2, reason: `Invalid subscriber DOB: "${mapped.subscriber_dob}"` });
+          continue;
+        }
+        const coverageStart = mapped.coverage_start ? normalizeDate(mapped.coverage_start) : null;
+        if (mapped.coverage_start && !coverageStart) {
+          errors.push({ row: i + 2, reason: `Invalid coverage start: "${mapped.coverage_start}"` });
+          continue;
+        }
+        const coverageEnd = mapped.coverage_end ? normalizeDate(mapped.coverage_end) : null;
+        if (mapped.coverage_end && !coverageEnd) {
+          errors.push({ row: i + 2, reason: `Invalid coverage end: "${mapped.coverage_end}"` });
+          continue;
+        }
+
+        // Duplicate check: same patient + payer + member ID
+        const existing = await client.query(
+          `SELECT id FROM insurance WHERE clinic_id = $1 AND patient_id = $2
+           AND LOWER(payer_name) = LOWER($3) AND member_id = $4 AND is_active = true`,
+          [clinicId, patientId, mapped.payer_name, mapped.member_id]
+        );
+        if (existing.rows.length > 0) {
+          if (duplicateHandling === 'skip') {
+            skipped++;
+            continue;
+          }
+          // update: refresh group/coverage fields, keep identity columns
+          await client.query(
+            `UPDATE insurance SET group_number = COALESCE($1, group_number),
+              plan_name = COALESCE($2, plan_name),
+              coverage_start = COALESCE($3, coverage_start),
+              coverage_end = COALESCE($4, coverage_end),
+              subscriber_name = COALESCE($5, subscriber_name),
+              updated_at = NOW()
+             WHERE id = $6`,
+            [
+              mapped.group_number || null, mapped.plan_name || null,
+              coverageStart, coverageEnd,
+              mapped.subscriber_name || null, existing.rows[0].id,
+            ]
+          );
+          updated++;
+          continue;
+        }
+
+        const insType = normalizeInsuranceType(mapped.insurance_type || '');
+        const patientDob = matcher.dobById.get(patientId) || '1900-01-01';
+        await client.query(
+          `INSERT INTO insurance (clinic_id, patient_id, payer_name, payer_id, plan_name, member_id,
+            group_number, subscriber_name, subscriber_dob, subscriber_relationship,
+            coverage_start, coverage_end, is_primary)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [
+            clinicId, patientId, mapped.payer_name,
+            mapped.payer_name.substring(0, 20).replace(/\s/g, '').toUpperCase(),
+            mapped.plan_name || null, mapped.member_id,
+            mapped.group_number || null,
+            mapped.subscriber_name || null, subDob || patientDob,
+            'self',
+            coverageStart || new Date().toISOString().substring(0, 10), coverageEnd,
+            insType === 'primary',
+          ]
+        );
+        imported++;
+      }
+
+      return { imported, skipped, errors, updated };
+    });
+
+    await logAudit({
+      clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.DATA_IMPORT,
+      resourceType: 'insurance',
+      details: {
+        source: 'practice_perfect',
+        totalRows: rows.length,
+        imported: (result as ImportResult & { updated: number }).imported,
+        skipped: result.skipped,
+        updated: (result as ImportResult & { updated: number }).updated,
+        errorCount: result.errors.length,
+      },
+      req,
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('Insurance import error:', err);
+    res.status(500).json({ success: false, error: 'Import failed. All changes have been rolled back.' });
+  }
+});
+
+// ── Import authorizations ──
+router.post('/authorizations', requirePermission(Permission.DATA_IMPORT), async (req: Request, res: Response) => {
+  try {
+    const { csv, duplicateHandling = 'skip' } = req.body;
+    const clinicId = req.auth!.clinicId;
+
+    if (!csv || typeof csv !== 'string') {
+      res.status(400).json({ success: false, error: 'CSV data is required' });
+      return;
+    }
+
+    const rows = parseCSV(csv);
+    if (rows.length === 0) {
+      res.status(400).json({ success: false, error: 'No data rows found' });
+      return;
+    }
+
+    const result = await transaction<ImportResult>(async (client) => {
+      let imported = 0;
+      let skipped = 0;
+      let updated = 0;
+      const errors: Array<{ row: number; reason: string }> = [];
+      const matcher = await buildPatientMatcher(client, clinicId);
+
+      for (let i = 0; i < rows.length; i++) {
+        const mapped = mapRow(rows[i], AUTHORIZATION_FIELD_MAP);
+
+        const dob = mapped.date_of_birth ? normalizeDate(mapped.date_of_birth) : null;
+        const patientId = matchPatient(mapped, matcher, dob);
+        if (!patientId) {
+          errors.push({ row: i + 2, reason: `Patient not found: "${mapped.mrn || (mapped.patient_first_name + ' ' + mapped.patient_last_name)}". Import patients first.` });
+          continue;
+        }
+
+        const authorizedVisits = parseInt(mapped.authorized_visits || '', 10);
+        if (isNaN(authorizedVisits) || authorizedVisits < 0) {
+          errors.push({ row: i + 2, reason: `Invalid visits authorized: "${mapped.authorized_visits}"` });
+          continue;
+        }
+        const startDate = normalizeDate(mapped.start_date || '');
+        if (!startDate) {
+          errors.push({ row: i + 2, reason: `Invalid start date: "${mapped.start_date}"` });
+          continue;
+        }
+        const endDate = mapped.end_date ? normalizeDate(mapped.end_date) : null;
+        if (mapped.end_date && !endDate) {
+          errors.push({ row: i + 2, reason: `Invalid end date: "${mapped.end_date}"` });
+          continue;
+        }
+        const usedVisits = parseInt(mapped.used_visits || '0', 10);
+        if (isNaN(usedVisits) || usedVisits < 0) {
+          errors.push({ row: i + 2, reason: `Invalid visits used: "${mapped.used_visits}"` });
+          continue;
+        }
+
+        // Link to insurance record by payer name when provided
+        let insuranceId: string | null = null;
+        if (mapped.payer_name) {
+          const ins = await client.query(
+            `SELECT id FROM insurance WHERE clinic_id = $1 AND patient_id = $2
+             AND LOWER(payer_name) = LOWER($3) AND is_active = true
+             ORDER BY is_primary DESC LIMIT 1`,
+            [clinicId, patientId, mapped.payer_name]
+          );
+          if (ins.rows.length > 0) insuranceId = ins.rows[0].id;
+        }
+
+        const status = normalizeAuthStatus(mapped.status || '');
+        const authNumber = mapped.authorization_number || null;
+
+        // Duplicate check: same patient + auth number (when present), else same patient + payer + dates
+        let existing: { rows: Array<{ id: string }> };
+        if (authNumber) {
+          existing = await client.query(
+            `SELECT id FROM authorizations WHERE clinic_id = $1 AND patient_id = $2 AND authorization_number = $3`,
+            [clinicId, patientId, authNumber]
+          );
+        } else {
+          existing = await client.query(
+            `SELECT id FROM authorizations WHERE clinic_id = $1 AND patient_id = $2
+             AND start_date = $3 AND authorized_visits = $4 AND authorization_number IS NULL`,
+            [clinicId, patientId, startDate, authorizedVisits]
+          );
+        }
+
+        if (existing.rows.length > 0) {
+          if (duplicateHandling === 'skip') {
+            skipped++;
+            continue;
+          }
+          await client.query(
+            `UPDATE authorizations SET authorized_visits = $1, used_visits = $2,
+              end_date = COALESCE($3, end_date), status = $4, notes = COALESCE($5, notes),
+              insurance_id = COALESCE($6, insurance_id), updated_at = NOW()
+             WHERE id = $7`,
+            [authorizedVisits, usedVisits, endDate, status, mapped.notes || null, insuranceId, existing.rows[0].id]
+          );
+          updated++;
+          continue;
+        }
+
+        await client.query(
+          `INSERT INTO authorizations (clinic_id, patient_id, insurance_id, authorization_number,
+            authorized_visits, used_visits, start_date, end_date, status, notes, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [
+            clinicId, patientId, insuranceId, authNumber,
+            authorizedVisits, usedVisits, startDate, endDate, status,
+            mapped.notes || null, req.auth!.userId,
+          ]
+        );
+        imported++;
+      }
+
+      return { imported, skipped, errors, updated };
+    });
+
+    await logAudit({
+      clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.DATA_IMPORT,
+      resourceType: 'authorizations',
+      details: {
+        source: 'practice_perfect',
+        totalRows: rows.length,
+        imported: (result as ImportResult & { updated: number }).imported,
+        skipped: result.skipped,
+        updated: (result as ImportResult & { updated: number }).updated,
+        errorCount: result.errors.length,
+      },
+      req,
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('Authorization import error:', err);
+    res.status(500).json({ success: false, error: 'Import failed. All changes have been rolled back.' });
+  }
+});
+
 // ── Download CSV templates ──
 router.get('/template/patients', requirePermission(Permission.DATA_IMPORT), (_req: Request, res: Response) => {
   const headers = [
@@ -714,6 +1175,29 @@ router.get('/template/appointments', requirePermission(Permission.DATA_IMPORT), 
   ];
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="emr_os_appointment_import_template.csv"');
+  res.send(headers.join(',') + '\n');
+});
+
+router.get('/template/insurance', requirePermission(Permission.DATA_IMPORT), (_req: Request, res: Response) => {
+  const headers = [
+    'MRN', 'Patient First Name', 'Patient Last Name', 'Date of Birth',
+    'Payer', 'Plan Name', 'Member ID', 'Group Number',
+    'Subscriber Name', 'Subscriber DOB', 'Subscriber Relationship',
+    'Coverage Start', 'Coverage End', 'Insurance Type',
+  ];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="emr_os_insurance_import_template.csv"');
+  res.send(headers.join(',') + '\n');
+});
+
+router.get('/template/authorizations', requirePermission(Permission.DATA_IMPORT), (_req: Request, res: Response) => {
+  const headers = [
+    'MRN', 'Patient First Name', 'Patient Last Name', 'Date of Birth',
+    'Payer', 'Auth Number', 'Visits Authorized', 'Visits Used',
+    'Start Date', 'End Date', 'Status', 'Notes',
+  ];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="emr_os_authorization_import_template.csv"');
   res.send(headers.join(',') + '\n');
 });
 

@@ -13,11 +13,12 @@ interface PreviewData {
 interface ImportResult {
   imported: number;
   skipped: number;
+  updated?: number;
   errors: Array<{ row: number; reason: string }>;
 }
 
 type Step = 'upload' | 'preview' | 'importing' | 'done';
-type ImportType = 'patients' | 'appointments';
+type ImportType = 'patients' | 'appointments' | 'insurance' | 'authorizations';
 
 const TYPE_INFO: Record<ImportType, { label: string; description: string; instructions: string[] }> = {
   patients: {
@@ -36,6 +37,26 @@ const TYPE_INFO: Record<ImportType, { label: string; description: string; instru
     instructions: [
       'In Practice Perfect, go to <strong>Reports</strong> > <strong>Appointment Listing</strong>',
       'Include: Date, Time, Patient Name, Therapist, Type, and Status',
+      'Click <strong>Export</strong> and save as CSV',
+      'Upload the CSV file here (import patients first!)',
+    ],
+  },
+  insurance: {
+    label: 'Insurance / Payers',
+    description: 'Import insurance records. Patients must be imported first so they can be matched by MRN.',
+    instructions: [
+      'In Practice Perfect, go to <strong>Reports</strong> > <strong>Client Listing</strong> with insurance fields',
+      'Include: MRN, Payer Name, Member ID, Group Number, Coverage Dates',
+      'Click <strong>Export</strong> and save as CSV',
+      'Upload the CSV file here (import patients first!)',
+    ],
+  },
+  authorizations: {
+    label: 'Authorizations',
+    description: 'Import prior authorizations. Patients must be imported first so they can be matched by MRN.',
+    instructions: [
+      'In Practice Perfect, go to <strong>Reports</strong> > <strong>Authorization Listing</strong>',
+      'Include: MRN, Payer, Auth Number, Visits Authorized, Start/End Dates, Status',
       'Click <strong>Export</strong> and save as CSV',
       'Upload the CSV file here (import patients first!)',
     ],
@@ -79,9 +100,12 @@ export default function ImportPage() {
     setStep('importing');
     setError('');
     try {
-      const endpoint = importType === 'patients' ? '/import/patients' : '/import/appointments';
+      const endpoint =
+        importType === 'patients' ? '/import/patients' :
+        importType === 'appointments' ? '/import/appointments' :
+        importType === 'insurance' ? '/import/insurance' : '/import/authorizations';
       const body: Record<string, unknown> = { csv: csvData };
-      if (importType === 'patients') body.duplicateHandling = duplicateHandling;
+      if (importType !== 'appointments') body.duplicateHandling = duplicateHandling;
       if (importType === 'appointments') body.defaultDuration = defaultDuration;
       const res = await api.post<any>(endpoint, body);
       setResult(res.data);
@@ -111,6 +135,14 @@ export default function ImportPage() {
         filename: 'emr_os_appointment_import_template.csv',
         headers: 'Appointment Date,Start Time,End Time,Duration,Patient First Name,Patient Last Name,MRN,Therapist,Appointment Type,Status,Notes',
       },
+      insurance: {
+        filename: 'emr_os_insurance_import_template.csv',
+        headers: 'MRN,Patient First Name,Patient Last Name,Date of Birth,Payer,Plan Name,Member ID,Group Number,Subscriber Name,Subscriber DOB,Subscriber Relationship,Coverage Start,Coverage End,Insurance Type',
+      },
+      authorizations: {
+        filename: 'emr_os_authorization_import_template.csv',
+        headers: 'MRN,Patient First Name,Patient Last Name,Date of Birth,Payer,Auth Number,Visits Authorized,Visits Used,Start Date,End Date,Status,Notes',
+      },
     };
     const t = templates[type];
     const blob = new Blob([t.headers + '\n'], { type: 'text/csv' });
@@ -123,7 +155,10 @@ export default function ImportPage() {
   }
 
   const info = TYPE_INFO[importType];
-  const itemLabel = importType === 'patients' ? 'Patient' : 'Appointment';
+  const itemLabel =
+    importType === 'patients' ? 'Patient' :
+    importType === 'appointments' ? 'Appointment' :
+    importType === 'insurance' ? 'Insurance Record' : 'Authorization';
 
   return (
     <div className="space-y-6">
@@ -292,11 +327,15 @@ export default function ImportPage() {
           <div className="card">
             <h4 className="font-medium mb-3">Import Options</h4>
             <div className="space-y-3">
-              {importType === 'patients' && (
+              {(importType === 'patients' || importType === 'insurance' || importType === 'authorizations') && (
                 <div>
                   <label className="label">Duplicate Handling</label>
                   <p className="text-xs text-slate-400 mb-1">
-                    When a patient with the same name and DOB already exists:
+                    {importType === 'patients'
+                      ? 'When a patient with the same name and DOB already exists:'
+                      : importType === 'insurance'
+                      ? 'When the same patient + payer + member ID already exists:'
+                      : 'When the same patient + auth number already exists:'}
                   </p>
                   <select
                     value={duplicateHandling}
@@ -304,7 +343,7 @@ export default function ImportPage() {
                     className="input max-w-xs"
                   >
                     <option value="skip">Skip duplicates</option>
-                    <option value="update">Update existing records</option>
+                    <option value="update">Update existing records (never overwrites with blank values)</option>
                   </select>
                 </div>
               )}
@@ -368,6 +407,12 @@ export default function ImportPage() {
               <div className="text-3xl font-bold text-slate-600">{result.skipped}</div>
               <div className="text-sm text-slate-500">Skipped</div>
             </div>
+            {typeof result.updated === 'number' && result.updated > 0 && (
+              <div className="bg-blue-50 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-blue-700">{result.updated}</div>
+                <div className="text-sm text-blue-600">Updated</div>
+              </div>
+            )}
             <div className="bg-red-50 rounded-lg p-4 text-center">
               <div className="text-3xl font-bold text-red-600">{result.errors.length}</div>
               <div className="text-sm text-red-500">Errors</div>
@@ -387,8 +432,11 @@ export default function ImportPage() {
 
           <div className="flex gap-3">
             <button onClick={reset} className="btn-secondary">Import More</button>
-            <a href={importType === 'patients' ? '/patients' : '/schedule'} className="btn-primary inline-flex items-center">
-              View {info.label}
+            <a href={
+              importType === 'patients' ? '/patients' :
+              importType === 'appointments' ? '/schedule' : '/patients'
+            } className="btn-primary inline-flex items-center">
+              View {importType === 'insurance' || importType === 'authorizations' ? 'Patients' : info.label}
             </a>
           </div>
         </div>
@@ -414,6 +462,32 @@ export default function ImportPage() {
             <span>Insurance / Payer</span>
             <span>Member ID / Policy #</span>
             <span>Group Number</span>
+          </div>
+        ) : importType === 'insurance' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">
+            <span>MRN / Client ID</span>
+            <span>Patient First/Last Name</span>
+            <span>Date of Birth / DOB</span>
+            <span>Payer / Insurance Company</span>
+            <span>Plan Name</span>
+            <span>Member ID / Policy #</span>
+            <span>Group Number</span>
+            <span>Subscriber Name / DOB</span>
+            <span>Subscriber Relationship</span>
+            <span>Coverage Start / End</span>
+            <span>Insurance Type (Primary/Secondary)</span>
+          </div>
+        ) : importType === 'authorizations' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">
+            <span>MRN / Client ID</span>
+            <span>Patient First/Last Name</span>
+            <span>Date of Birth / DOB</span>
+            <span>Payer / Insurance</span>
+            <span>Auth Number</span>
+            <span>Visits Authorized / Used</span>
+            <span>Start Date / End Date</span>
+            <span>Status</span>
+            <span>Notes</span>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs text-blue-700">

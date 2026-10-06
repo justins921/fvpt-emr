@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { api } from '../services/api';
+import { api, ApiError } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import ErrorBoundary from '../components/ErrorBoundary';
 
@@ -32,12 +32,32 @@ export default function PatientChartPage() {
     if (id) loadPatient();
   }, [id]);
 
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+
   async function loadPatient() {
     try {
       const res = await api.get<any>(`/patients/${id}`);
       setPatient(res.data);
     } catch { /* handle error */ }
     finally { setLoading(false); }
+  }
+
+  async function handleExportChart(includeInternal: boolean) {
+    if (!id || !patient) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const fname = `chart_${patient.mrn || id}_${new Date().toISOString().substring(0, 10)}.json`;
+      await api.downloadFile(
+        `/exports/patient/${id}/json${includeInternal ? '?includeInternal=true' : ''}`,
+        fname
+      );
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>;
@@ -65,7 +85,30 @@ export default function PatientChartPage() {
         {patient.precautions && (
           <div className="badge-red text-sm">⚠ {patient.precautions}</div>
         )}
+        <div className="flex flex-col gap-1 sm:ml-auto">
+          <button
+            onClick={() => handleExportChart(false)}
+            disabled={exporting}
+            className="btn-secondary text-xs whitespace-nowrap"
+            title="Download full chart as JSON (demographics, insurance, notes, HEP, authorizations, appointments, ledger)"
+          >
+            {exporting ? 'Exporting...' : 'Export Chart'}
+          </button>
+          <button
+            onClick={() => handleExportChart(true)}
+            disabled={exporting}
+            className="text-xs text-slate-400 underline hover:text-slate-600 whitespace-nowrap"
+            title="Include staff-only internal notes (for system migration)"
+          >
+            with internal notes
+          </button>
+        </div>
       </div>
+      {exportError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+          {exportError}
+        </div>
+      )}
 
       {/* Tab navigation */}
       <div className="flex gap-1 overflow-x-auto pb-1">
