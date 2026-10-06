@@ -4,6 +4,7 @@ import { authenticate, validateSession, requirePermission, tenantScope } from '.
 import { query } from '../db';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
+import { processCharge, processRefund } from '../services/payments';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -119,16 +120,49 @@ router.delete('/methods/:id', requirePermission(Permission.PAYMENT_PROCESS), asy
 
 // ── Process a Payment (Charge) ──
 router.post('/charge', requirePermission(Permission.PAYMENT_PROCESS), async (req: Request, res: Response) => {
-  // PAYMENT PROCESSING DISABLED — no payment gateway is integrated.
-  // The previous implementation recorded transactions as "completed" without
-  // actually charging anything, which is dangerous. Re-enable when Stripe
-  // (or another gateway) is integrated.
-  res.status(501).json({
-    success: false,
-    error: 'Payment processing is not configured. Record payments manually in the ledger.',
-  });
-  return;
+  try {
+    const schema = z.object({
+      patient_id: z.string().uuid(),
+      payment_method_id: z.string().uuid(),
+      amount_cents: z.number().int().positive(),
+      description: z.string().min(1).max(500),
+    });
+    const input = schema.parse(req.body);
 
+    const result = await processCharge(
+      req.auth!.clinicId,
+      input.patient_id,
+      input.payment_method_id,
+      input.amount_cents,
+      input.description,
+      req.auth!.userId
+    );
+
+    if (!result.success) {
+      // 501 if no processor configured, 400 for other failures
+      const status = result.error?.includes('No payment processor configured') ? 501 : 400;
+      res.status(status).json({ success: false, error: result.error });
+      return;
+    }
+
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.PAYMENT_PROCESS,
+      resourceType: 'payment_transaction',
+      resourceId: result.transactionId!,
+      details: { amountCents: input.amount_cents },
+      req,
+    });
+
+    res.json({ success: true, data: { id: result.transactionId } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
 });
 
 

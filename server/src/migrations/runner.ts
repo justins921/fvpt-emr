@@ -41,6 +41,7 @@ async function run() {
       { name: '024_online_booking', module: await import('./024_online_booking') },
       { name: '025_portal_expansion', module: await import('./025_portal_expansion') },
       { name: '026_booking_timezone', module: await import('./026_booking_timezone') },
+      { name: '027_payment_processor', module: await import('./027_payment_processor') },
     ];
 
     if (direction === 'up') {

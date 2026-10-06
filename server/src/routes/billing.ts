@@ -8,6 +8,7 @@ import { scrubClaim, generate837P, parseERA, postERAToLedger, runUnderpaymentDet
 import { runCodeReview, getLatestCodeReview } from '../services/codeReview';
 import { draftAppeal, getAppealDrafts, updateAppealDraft } from '../services/appealDraft';
 import { LLMError } from '../services/llm';
+import { checkKxModifier, updateCapTracking } from '../services/therapy-cap';
 import {
   scoreClaimRisk,
   relearnClinicPatterns,
@@ -221,7 +222,31 @@ router.post('/claims', requirePermission(Permission.BILLING_CREATE), async (req:
       req,
     });
 
-    res.status(201).json({ success: true, data: { id: result.rows[0].id, claimNumber } });
+    // Check Medicare therapy cap / KX modifier requirement
+    const serviceYear = new Date(input.serviceDate).getFullYear();
+    const capCheck = await checkKxModifier(req.auth!.clinicId, input.patientId, serviceYear);
+    // Update cap tracking with this claim's charges
+    await updateCapTracking(req.auth!.clinicId, input.patientId, serviceYear, totalChargeCents, 0);
+
+    const kxWarnings: string[] = [];
+    if (capCheck.kxRequired) {
+      const hasKx = input.lineItems.some(item =>
+        (item.modifiers || []).some(m => m.toUpperCase() === 'KX')
+      );
+      if (!hasKx) {
+        kxWarnings.push('Medicare therapy cap reached — KX modifier required on line items');
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.rows[0].id,
+        claimNumber,
+        kxRequired: capCheck.kxRequired,
+        warnings: kxWarnings,
+      },
+    });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });

@@ -24,6 +24,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     const payload = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
+    // Reject MFA challenge tokens — they are not valid session tokens
+    if ((payload as any).purpose === 'mfa_challenge') {
+      res.status(401).json({ success: false, error: 'Invalid token' });
+      return;
+    }
     req.auth = payload;
     next();
   } catch (err) {
