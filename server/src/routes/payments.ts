@@ -119,87 +119,18 @@ router.delete('/methods/:id', requirePermission(Permission.PAYMENT_PROCESS), asy
 
 // ── Process a Payment (Charge) ──
 router.post('/charge', requirePermission(Permission.PAYMENT_PROCESS), async (req: Request, res: Response) => {
-  try {
-    const schema = z.object({
-      patient_id: z.string().uuid(),
-      payment_method_id: z.string().uuid(),
-      amount_cents: z.number().int().positive(),
-      description: z.string().min(1).max(500),
-    });
-    const input = schema.parse(req.body);
+  // PAYMENT PROCESSING DISABLED — no payment gateway is integrated.
+  // The previous implementation recorded transactions as "completed" without
+  // actually charging anything, which is dangerous. Re-enable when Stripe
+  // (or another gateway) is integrated.
+  res.status(501).json({
+    success: false,
+    error: 'Payment processing is not configured. Record payments manually in the ledger.',
+  });
+  return;
 
-    // Verify payment method belongs to this patient and clinic
-    const methodResult = await query(
-      `SELECT id, processor_token, last_four, brand
-       FROM payment_methods
-       WHERE id = $1 AND clinic_id = $2 AND patient_id = $3 AND is_active = true`,
-      [input.payment_method_id, req.auth!.clinicId, input.patient_id]
-    );
-
-    if (methodResult.rows.length === 0) {
-      res.status(404).json({ success: false, error: 'Payment method not found or inactive' });
-      return;
-    }
-
-    const method = methodResult.rows[0];
-
-    // Create payment transaction record
-    const txnResult = await query(
-      `INSERT INTO payment_transactions (clinic_id, patient_id, payment_method_id, amount_cents, description, processor_transaction_id, status, processed_by)
-       VALUES ($1, $2, $3, $4, $5, $6, 'completed', $7)
-       RETURNING id`,
-      [
-        req.auth!.clinicId,
-        input.patient_id,
-        input.payment_method_id,
-        input.amount_cents,
-        input.description,
-        method.processor_token,
-        req.auth!.userId,
-      ]
-    );
-
-    const transactionId = txnResult.rows[0].id;
-
-    // Create corresponding ledger entry
-    await query(
-      `INSERT INTO ledger_entries (clinic_id, patient_id, entry_type, amount_cents, description, posted_by)
-       VALUES ($1, $2, 'payment', $3, $4, $5)`,
-      [
-        req.auth!.clinicId,
-        input.patient_id,
-        input.amount_cents,
-        `Card payment (${method.brand} ...${method.last_four}): ${input.description}`,
-        req.auth!.userId,
-      ]
-    );
-
-    await logAudit({
-      clinicId: req.auth!.clinicId,
-      userId: req.auth!.userId,
-      action: AuditAction.PAYMENT_PROCESS,
-      resourceType: 'payment_transaction',
-      resourceId: transactionId,
-      details: { patient_id: input.patient_id, amount_cents: input.amount_cents, last_four: method.last_four },
-      req,
-    });
-
-    res.status(201).json({
-      success: true,
-      data: {
-        transaction_id: transactionId,
-        amount_cents: input.amount_cents,
-        status: 'completed',
-      },
-    });
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
-      return;
-    }
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
 });
+
 
 // ── Process Refund ──
 router.post('/refund', requirePermission(Permission.PAYMENT_PROCESS), async (req: Request, res: Response) => {

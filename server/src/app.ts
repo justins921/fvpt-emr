@@ -116,10 +116,13 @@ app.use('/api/text-expanders', textExpanderRoutes);
 app.use('/api/reporting', reportingRoutes);
 app.use('/api/portal/patient/hep', portalHepRoutes);
 app.use('/api/portal/booking', portalBookingRouter);
+// portalRoutes BEFORE portalPatientRouter: portalRoutes contains the public
+// POST /patient/login which would otherwise be shadowed by portalPatientRouter's
+// auth middleware (Express matches in mount order).
+app.use('/api/portal', portalRoutes);
 app.use('/api/portal/patient', portalPatientRouter);
 app.use('/api/portal', portalPatientStaffRouter);
 app.use('/api/portal', portalPatientPublicRouter);
-app.use('/api/portal', portalRoutes);
 app.use('/api/online-booking', onlineBookingRouter);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/workers-comp', workersCompRoutes);
