@@ -213,6 +213,63 @@ router.put('/me/dashboard', async (req: Request, res: Response) => {
   }
 });
 
+// Update current user's profile (name)
+router.put('/me/profile', async (req: Request, res: Response) => {
+  try {
+    const input = z.object({
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
+    }).parse(req.body);
+    const result = await query(
+      `UPDATE users SET first_name = $2, last_name = $3, updated_at = NOW()
+       WHERE id = $1 RETURNING id, first_name AS "firstName", last_name AS "lastName"`,
+      [req.auth!.userId, input.firstName.trim(), input.lastName.trim()]
+    );
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.USER_EDIT, resourceType: 'user',
+      resourceId: req.auth!.userId, details: { self: true }, req,
+    });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Change current user's password (requires current password)
+router.put('/me/password', async (req: Request, res: Response) => {
+  try {
+    const input = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(12).max(128),
+    }).parse(req.body);
+    const { verifyPassword } = await import('../services/auth');
+    const row = await query(`SELECT password_hash FROM users WHERE id = $1`, [req.auth!.userId]);
+    if (row.rows.length === 0 || !(await verifyPassword(input.currentPassword, row.rows[0].password_hash))) {
+      res.status(401).json({ success: false, error: 'Current password is incorrect' });
+      return;
+    }
+    const newHash = await hashPassword(input.newPassword);
+    await query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [req.auth!.userId, newHash]);
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.USER_EDIT, resourceType: 'user',
+      resourceId: req.auth!.userId, details: { self: true, passwordChange: true }, req,
+    });
+    res.json({ success: true, data: { changed: true } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'New password must be at least 12 characters' });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Get single user
 // List invites for this clinic (pending first)
 // NOTE: registered before GET /:id so "invites" isn't captured as an id

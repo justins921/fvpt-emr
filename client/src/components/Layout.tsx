@@ -1,8 +1,9 @@
 import { useState, CSSProperties } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
 import { accentPreset, accentCssVars } from '../utils/dashboardPrefs';
+import { api, ApiError } from '../services/api';
 
 /* ── Primary nav: always visible ── */
 const PRIMARY_NAV = [
@@ -59,8 +60,11 @@ export default function Layout() {
   const { user, logout, switchClinic, isSwitchingClinic } = useAuth();
   const { prefs } = useDashboardPrefs();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const preset = accentPreset(prefs.accent_color);
   const accentStyle = accentCssVars(preset) as CSSProperties;
@@ -164,8 +168,11 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-primary-800">
-          <div className="flex items-center gap-3 mb-2">
+        <div className="p-3 border-t border-primary-800 relative">
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="w-full flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-primary-800/50 transition-colors text-left"
+          >
             {prefs.avatar ? (
               <img src={prefs.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
             ) : (
@@ -177,12 +184,37 @@ export default function Layout() {
               <div className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</div>
               <div className="text-xs text-primary-300 capitalize">{user?.role?.replace('_', ' ')}{user?.clinicName ? ` \u00b7 ${user.clinicName}` : ''}</div>
             </div>
-          </div>
-          <button onClick={logout} className="w-full text-left text-sm text-primary-300 hover:text-white py-1">
-            Sign Out
+            <span className="text-primary-300 text-xs">▲</span>
           </button>
+          {userMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+              <div className="absolute bottom-full left-3 right-3 mb-2 z-50 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 text-slate-700">
+                <button
+                  onClick={() => { setUserMenuOpen(false); navigate('/app'); }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <span>🎨</span> Customize dashboard
+                </button>
+                <button
+                  onClick={() => { setUserMenuOpen(false); setAccountOpen(true); }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+                >
+                  <span>⚙️</span> Account settings
+                </button>
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={logout}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 text-red-600 flex items-center gap-2"
+                >
+                  <span>🚪</span> Sign out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </aside>
+      {accountOpen && <AccountSettingsModal onClose={() => setAccountOpen(false)} />}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -211,6 +243,88 @@ export default function Layout() {
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <Outlet />
         </main>
+      </div>
+    </div>
+  );
+}
+
+function AccountSettingsModal({ onClose }: { onClose: () => void }) {
+  const { user, checkAuth } = useAuth();
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true); setError(null); setSuccess(null);
+    try {
+      await api.put('/users/me/profile', { firstName: firstName.trim(), lastName: lastName.trim() });
+      await checkAuth();
+      setSuccess('Name updated.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update name.');
+    } finally { setSaving(false); }
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPw !== confirmPw) { setError('New passwords do not match.'); return; }
+    setSaving(true); setError(null); setSuccess(null);
+    try {
+      await api.put('/users/me/password', { currentPassword: currentPw, newPassword: newPw });
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setSuccess('Password changed.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to change password.');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Account settings</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+        </div>
+        {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
+        {success && <div className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{success}</div>}
+        <form onSubmit={saveProfile} className="space-y-3">
+          <h3 className="text-sm font-medium text-slate-700">Profile</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">First name</label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} required className="input" />
+            </div>
+            <div>
+              <label className="label">Last name</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)} required className="input" />
+            </div>
+          </div>
+          <div className="text-xs text-slate-500">Signed in as <span className="font-mono">{user?.username}</span> · {user?.role?.replace('_', ' ')}</div>
+          <button type="submit" disabled={saving} className="btn-primary text-sm">{saving ? 'Saving…' : 'Save name'}</button>
+        </form>
+        <form onSubmit={changePassword} className="space-y-3 border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-medium text-slate-700">Change password</h3>
+          <div>
+            <label className="label">Current password</label>
+            <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} required className="input" autoComplete="current-password" />
+          </div>
+          <div>
+            <label className="label">New password (12+ characters)</label>
+            <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required minLength={12} className="input" autoComplete="new-password" />
+          </div>
+          <div>
+            <label className="label">Confirm new password</label>
+            <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required className="input" autoComplete="new-password" />
+          </div>
+          <button type="submit" disabled={saving} className="btn-primary text-sm">{saving ? 'Saving…' : 'Change password'}</button>
+        </form>
       </div>
     </div>
   );

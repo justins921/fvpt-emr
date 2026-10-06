@@ -1,68 +1,30 @@
 import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
-/* ─── Pricing tiers: Good / Better / Best (Pricing Strategy skill) ─── */
+/* ─── Pricing: one flat plan, everything included ─── */
 const TIERS = [
   {
-    name: 'Starter',
-    price: 149,
+    name: 'Everything Included',
+    price: 175,
     period: '/provider/mo',
-    description: 'Everything a solo practitioner needs to run a modern PT clinic.',
-    cta: 'Request a Demo',
-    highlight: false,
-    features: [
-      'Scheduling & calendar',
-      'Patient charting & SOAP notes',
-      'Billing & claims',
-      'Exercise library (500+)',
-      'Patient portal',
-      'Secure messaging',
-      'Telehealth (basic)',
-      'Email support',
-    ],
-  },
-  {
-    name: 'Professional',
-    price: 249,
-    period: '/provider/mo',
-    description: 'For growing clinics that need advanced workflows and automation.',
+    description: 'One plan. Every feature. No tiers, no add-ons, no surprises.',
     cta: 'Request a Demo',
     highlight: true,
     features: [
-      'Everything in Starter, plus:',
+      'Scheduling & calendar',
+      'Patient charting & SOAP notes',
+      'Billing & claims with AI revenue tools',
       'Home exercise programs (HEP)',
-      'Outcome measures & tracking',
+      'Exercise library (500+)',
+      'Patient portal',
       'Authorizations management',
       'Eligibility verification',
+      'Outcome measures & tracking',
+      'Secure messaging & fax',
       'Digital intake forms',
-      'Waitlist management',
-      'Recall campaigns',
-      'Fax integration',
-      'Referring provider directory',
+      'Telehealth built in',
       'Custom reporting',
       'Priority support',
-    ],
-  },
-  {
-    name: 'Enterprise',
-    price: 399,
-    period: '/provider/mo',
-    description: 'Multi-location clinics with complex compliance and integration needs.',
-    cta: 'Contact Sales',
-    highlight: false,
-    features: [
-      'Everything in Professional, plus:',
-      'Multi-location management',
-      'FHIR interoperability',
-      'MIPS quality reporting',
-      "Workers' compensation",
-      'Advanced analytics & KPIs',
-      'Patient statements & batch billing',
-      'Payment processing',
-      'Custom text expanders',
-      'Dedicated account manager',
-      'SSO & advanced security',
-      '99.99% uptime SLA',
     ],
   },
 ];
@@ -199,6 +161,7 @@ export default function LandingPage() {
           {/* Desktop nav links */}
           <div className="hidden md:flex items-center gap-8 text-sm text-slate-600">
             <a href="#features" className="hover:text-primary-600 transition-colors">Features</a>
+            <a href="#ai" className="hover:text-primary-600 transition-colors">AI</a>
             <a href="#pricing" className="hover:text-primary-600 transition-colors">Pricing</a>
             <a href="#compare" className="hover:text-primary-600 transition-colors">Compare</a>
             <a href="#faq" className="hover:text-primary-600 transition-colors">FAQ</a>
@@ -354,6 +317,46 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── AI BILLING FEATURES ─── */}
+      <section id="ai" className="py-12 sm:py-16 md:py-24 bg-slate-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10 sm:mb-16">
+            <div className="text-xs font-bold uppercase tracking-widest text-primary-400 mb-3">Included free — no add-on fees</div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
+              AI that finds your missing revenue
+            </h2>
+            <p className="mt-3 sm:mt-4 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto">
+              Four AI tools that watch your billing around the clock — catching underpayments, predicting denials, checking your codes, and drafting appeals. Included at no extra charge. You bring your own AI key; your data goes straight to your provider, never through us.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
+            <div className="rounded-2xl bg-slate-800 p-5 sm:p-6">
+              <div className="text-2xl sm:text-3xl mb-3">🔍</div>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Underpayment Detection</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Compares every ERA payment against your contracted fee schedules and flags shortfalls automatically — so underpaid claims stop slipping through.</p>
+            </div>
+            <div className="rounded-2xl bg-slate-800 p-5 sm:p-6">
+              <div className="text-2xl sm:text-3xl mb-3">⚠️</div>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Denial Risk Scoring</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Learns your payers&apos; denial patterns and scores each claim before you submit — fix problems before they become denials.</p>
+            </div>
+            <div className="rounded-2xl bg-slate-800 p-5 sm:p-6">
+              <div className="text-2xl sm:text-3xl mb-3">📝</div>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Documentation-to-Code Review</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Reads your clinical notes and checks them against billed codes — flagging unsupported codes and missed charges, with note quotes as evidence.</p>
+            </div>
+            <div className="rounded-2xl bg-slate-800 p-5 sm:p-6">
+              <div className="text-2xl sm:text-3xl mb-3">✉️</div>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Appeal Drafts</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Drafts payer appeal letters from denial reasons and your note content — grounded in documentation, ready for your review before sending.</p>
+            </div>
+          </div>
+          <p className="text-center mt-8 text-sm text-slate-500 max-w-2xl mx-auto">
+            AI features are optional and assistive — you review everything before it goes out. Bring your own Anthropic or OpenAI key; usage is billed by your AI provider, not by us.
+          </p>
+        </div>
+      </section>
+
       {/* ─── COMPARISON TABLE ─── */}
       <section id="compare" className="py-12 sm:py-16 md:py-24 bg-slate-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -455,7 +458,7 @@ export default function LandingPage() {
               No hidden fees. No add-on charges. Everything included in your plan.
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-1 gap-6 sm:gap-8 max-w-2xl mx-auto">
             {TIERS.map(tier => (
               <div
                 key={tier.name}
