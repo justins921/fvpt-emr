@@ -90,6 +90,80 @@ router.get('/roles', requirePermission(Permission.USER_VIEW), async (req: Reques
   }
 });
 
+// Dashboard preferences for the current user (own data only — no extra permission needed)
+const DASHBOARD_CARD_IDS = ['stats', 'schedule', 'quick_actions'] as const;
+
+const dashboardCardSchema = z.object({
+  id: z.enum(DASHBOARD_CARD_IDS),
+  visible: z.boolean(),
+  order: z.number().int().min(0),
+});
+
+const dashboardPrefsSchema = z.object({
+  cards: z.array(dashboardCardSchema).min(1).max(10),
+});
+
+const DEFAULT_DASHBOARD_PREFS = {
+  cards: DASHBOARD_CARD_IDS.map((id, i) => ({ id, visible: true, order: i })),
+};
+
+function normalizeDashboardPrefs(raw: any) {
+  const prefs = raw && typeof raw === 'object' ? raw : {};
+  const cards = Array.isArray(prefs.cards) ? prefs.cards : [];
+  const byId = new Map<string, { visible?: unknown; order?: unknown }>(
+    cards
+      .filter((c: any) => c && typeof c === 'object' && DASHBOARD_CARD_IDS.includes(c.id))
+      .map((c: any) => [c.id as string, { visible: c.visible, order: c.order }])
+  );
+  return {
+    cards: DASHBOARD_CARD_IDS.map((id, i) => {
+      const c = byId.get(id);
+      return {
+        id,
+        visible: typeof c?.visible === 'boolean' ? c.visible : true,
+        order: Number.isInteger(c?.order) ? (c!.order as number) : i,
+      };
+    }).sort((a, b) => a.order - b.order),
+  };
+}
+
+// Get current user's dashboard preferences (defaults when none saved)
+router.get('/me/dashboard', async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT preferences FROM dashboard_preferences WHERE user_id = $1`,
+      [req.auth!.userId]
+    );
+    const prefs = result.rows.length > 0
+      ? normalizeDashboardPrefs(result.rows[0].preferences)
+      : DEFAULT_DASHBOARD_PREFS;
+    res.json({ success: true, data: prefs });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Save current user's dashboard preferences
+router.put('/me/dashboard', async (req: Request, res: Response) => {
+  try {
+    const input = dashboardPrefsSchema.parse(req.body);
+    const prefs = normalizeDashboardPrefs(input);
+    await query(
+      `INSERT INTO dashboard_preferences (user_id, preferences, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET preferences = EXCLUDED.preferences, updated_at = NOW()`,
+      [req.auth!.userId, JSON.stringify(prefs)]
+    );
+    res.json({ success: true, data: prefs });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Get single user
 router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
