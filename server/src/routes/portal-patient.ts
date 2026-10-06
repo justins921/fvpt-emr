@@ -300,7 +300,7 @@ patientRouter.put('/intake-forms/:id', async (req: Request, res: Response) => {
 
     await query(
       `UPDATE intake_form_submissions
-       SET status = 'completed', responses = $2, submitted_at = NOW(), updated_at = NOW()
+       SET status = 'completed', responses = $2, submitted_at = NOW()
        WHERE id = $1`,
       [req.params.id, JSON.stringify(input.responses)]
     );

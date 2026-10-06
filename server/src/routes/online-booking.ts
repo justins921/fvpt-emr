@@ -20,6 +20,50 @@ import { logAudit } from '../services/audit';
 const staffRouter = Router();
 staffRouter.use(authenticate, validateSession, tenantScope);
 
+// ── Timezone helpers ────────────────────────────────────────────────────────
+// Vercel runs in UTC; clinics are in their own timezone. All slot times are
+// interpreted in the clinic's timezone, then converted to UTC for storage.
+
+function getTimezoneOffsetMs(timezone: string, date: Date): number {
+  // Returns the offset in ms to ADD to UTC to get wall-clock time in tz.
+  // Uses Intl to find what wall-clock time a UTC instant shows as in tz.
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || '0';
+  const asUTC = Date.UTC(
+    Number(get('year')), Number(get('month')) - 1, Number(get('day')),
+    Number(get('hour')), Number(get('minute')), Number(get('second'))
+  );
+  return asUTC - date.getTime();
+}
+
+function zonedTimeToUtc(timezone: string, dateStr: string, hours: number, minutes: number): Date {
+  // dateStr: 'YYYY-MM-DD', hours/minutes: wall-clock time in tz.
+  // Returns the UTC Date for that wall-clock time.
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Start with a guess: treat wall-clock as UTC, then correct by the offset.
+  let utc = new Date(Date.UTC(y, m - 1, d, hours, minutes, 0, 0));
+  const offset = getTimezoneOffsetMs(timezone, utc);
+  utc = new Date(utc.getTime() - offset);
+  // One refinement pass for DST edge cases.
+  const offset2 = getTimezoneOffsetMs(timezone, utc);
+  if (offset2 !== offset) utc = new Date(utc.getTime() - (offset2 - offset));
+  return utc;
+}
+
+function getDayOfWeekInTz(timezone: string, dateStr: string): number {
+  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' });
+  // Use noon UTC to avoid date-boundary issues.
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const day = dtf.format(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(day);
+}
+
 // ── Settings ────────────────────────────────────────────────────────────────
 
 const settingsSchema = z.object({
@@ -29,6 +73,7 @@ const settingsSchema = z.object({
   slot_duration_minutes: z.number().int().min(15).max(120),
   booking_window_start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   booking_window_end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  timezone: z.string().min(1).max(50).optional(),
 });
 
 staffRouter.get('/settings', requirePermission(Permission.SCHEDULE_VIEW), async (req: Request, res: Response) => {
@@ -71,8 +116,8 @@ staffRouter.put('/settings', requirePermission(Permission.SCHEDULE_EDIT), async 
     await query(
       `INSERT INTO clinic_booking_settings
          (clinic_id, online_booking_enabled, booking_mode, advance_booking_days,
-          slot_duration_minutes, booking_window_start, booking_window_end, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6::time, $7::time, NOW())
+          slot_duration_minutes, booking_window_start, booking_window_end, timezone, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::time, $7::time, $8, NOW())
        ON CONFLICT (clinic_id) DO UPDATE SET
          online_booking_enabled = EXCLUDED.online_booking_enabled,
          booking_mode = EXCLUDED.booking_mode,
@@ -80,6 +125,7 @@ staffRouter.put('/settings', requirePermission(Permission.SCHEDULE_EDIT), async 
          slot_duration_minutes = EXCLUDED.slot_duration_minutes,
          booking_window_start = EXCLUDED.booking_window_start,
          booking_window_end = EXCLUDED.booking_window_end,
+         timezone = EXCLUDED.timezone,
          updated_at = NOW()`,
       [
         req.auth!.clinicId,
@@ -89,6 +135,7 @@ staffRouter.put('/settings', requirePermission(Permission.SCHEDULE_EDIT), async 
         input.slot_duration_minutes,
         input.booking_window_start,
         input.booking_window_end,
+        input.timezone || 'America/Chicago',
       ]
     );
     await logAudit({
@@ -226,6 +273,7 @@ interface BookingSettings {
   slot_duration_minutes: number;
   booking_window_start: string;
   booking_window_end: string;
+  timezone: string;
 }
 
 async function getSettings(clinicId: string): Promise<BookingSettings | null> {
@@ -233,7 +281,8 @@ async function getSettings(clinicId: string): Promise<BookingSettings | null> {
     `SELECT online_booking_enabled, booking_mode, advance_booking_days,
             slot_duration_minutes,
             to_char(booking_window_start, 'HH24:MI') AS booking_window_start,
-            to_char(booking_window_end, 'HH24:MI') AS booking_window_end
+            to_char(booking_window_end, 'HH24:MI') AS booking_window_end,
+            timezone
      FROM clinic_booking_settings WHERE clinic_id = $1`,
     [clinicId]
   );
@@ -281,14 +330,18 @@ portalRouter.get('/slots', async (req: Request, res: Response) => {
       return;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const target = new Date(dateParam + 'T00:00:00');
-    if (isNaN(target.getTime())) {
+    const tz = settings.timezone || 'America/Chicago';
+    // "Today" in the clinic's timezone, as YYYY-MM-DD.
+    const nowUtc = new Date();
+    const tzNow = new Date(nowUtc.getTime() + getTimezoneOffsetMs(tz, nowUtc));
+    const todayStr = tzNow.toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam) || isNaN(new Date(dateParam + 'T00:00:00Z').getTime())) {
       res.status(400).json({ success: false, error: 'Invalid date' });
       return;
     }
-    const daysOut = Math.round((target.getTime() - today.getTime()) / 86400000);
+    const daysOut = Math.round(
+      (new Date(dateParam + 'T00:00:00Z').getTime() - new Date(todayStr + 'T00:00:00Z').getTime()) / 86400000
+    );
     if (daysOut < 0 || daysOut > settings.advance_booking_days) {
       res.status(400).json({ success: false, error: 'Date is outside the booking window' });
       return;
@@ -320,11 +373,9 @@ portalRouter.get('/slots', async (req: Request, res: Response) => {
       return;
     }
 
-    const dayOfWeek = target.getDay();
-    const dayStart = new Date(target);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(target);
-    dayEnd.setHours(23, 59, 59, 999);
+    const dayOfWeek = getDayOfWeekInTz(tz, dateParam);
+    const dayStart = zonedTimeToUtc(tz, dateParam, 0, 0);
+    const dayEnd = zonedTimeToUtc(tz, dateParam, 23, 59);
 
     // Existing non-cancelled appointments for these therapists that day
     const appts = await query(
@@ -365,8 +416,7 @@ portalRouter.get('/slots', async (req: Request, res: Response) => {
         const blockEnd = toMin(block.end_time);
         for (const slotMin of candidateSlots) {
           if (slotMin < blockStart || slotMin + settings.slot_duration_minutes > blockEnd) continue;
-          const slotStart = new Date(target);
-          slotStart.setHours(Math.floor(slotMin / 60), slotMin % 60, 0, 0);
+          const slotStart = zonedTimeToUtc(tz, dateParam, Math.floor(slotMin / 60), slotMin % 60);
           if (slotStart.getTime() <= now) continue; // no past slots
           const slotEndMs = slotStart.getTime() + settings.slot_duration_minutes * 60000;
           const overlaps = busy.some((b) => slotStart.getTime() < b.end && slotEndMs > b.start);
@@ -458,21 +508,27 @@ portalRouter.post('/book', async (req: Request, res: Response) => {
       res.status(400).json({ success: false, error: 'Invalid slot_start' });
       return;
     }
+    const tz = settings.timezone || 'America/Chicago';
     const now = Date.now();
     if (slotStart.getTime() <= now) {
       res.status(400).json({ success: false, error: 'That time slot has already passed' });
       return;
     }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const daysOut = Math.round((slotStart.getTime() - today.getTime()) / 86400000);
+    // "Today" in the clinic's timezone for advance-day calculation.
+    const tzNow = new Date(now + getTimezoneOffsetMs(tz, new Date(now)));
+    const todayStr = tzNow.toISOString().slice(0, 10);
+    const slotDateStr = new Date(slotStart.getTime() + getTimezoneOffsetMs(tz, slotStart)).toISOString().slice(0, 10);
+    const daysOut = Math.round(
+      (new Date(slotDateStr + 'T00:00:00Z').getTime() - new Date(todayStr + 'T00:00:00Z').getTime()) / 86400000
+    );
     if (daysOut < 0 || daysOut > settings.advance_booking_days) {
       res.status(400).json({ success: false, error: 'Date is outside the booking window' });
       return;
     }
 
-    // Slot must align with the clinic's slot grid
-    const slotMin = slotStart.getHours() * 60 + slotStart.getMinutes();
+    // Slot must align with the clinic's slot grid (in clinic timezone)
+    const tzSlot = new Date(slotStart.getTime() + getTimezoneOffsetMs(tz, slotStart));
+    const slotMin = tzSlot.getUTCHours() * 60 + tzSlot.getUTCMinutes();
     const toMin = (t: string) => {
       const [h, m] = t.split(':').map(Number);
       return h * 60 + m;
@@ -594,6 +650,10 @@ portalRouter.post('/book', async (req: Request, res: Response) => {
       [therapistId]
     );
     const tn = therapistName.rows[0];
+    if (!tn) {
+      res.status(500).json({ success: false, error: 'Could not load therapist details' });
+      return;
+    }
 
     res.status(201).json({
       success: true,

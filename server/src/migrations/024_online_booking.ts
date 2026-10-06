@@ -25,6 +25,7 @@ export async function up(client: any): Promise<void> {
         CHECK (slot_duration_minutes BETWEEN 15 AND 120),
       booking_window_start TIME NOT NULL DEFAULT '08:00',
       booking_window_end TIME NOT NULL DEFAULT '17:00',
+      timezone VARCHAR(50) NOT NULL DEFAULT 'America/Chicago',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT chk_booking_window CHECK (booking_window_end > booking_window_start)
