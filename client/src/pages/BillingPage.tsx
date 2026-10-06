@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import CodeReviewPanel from '../components/CodeReviewPanel';
+import AppealDraftPanel from '../components/AppealDraftPanel';
 
 export default function BillingPage() {
   const location = useLocation();
@@ -39,6 +40,7 @@ function ClaimsList() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [reviewClaimId, setReviewClaimId] = useState<string | null>(null);
+  const [appealClaimId, setAppealClaimId] = useState<string | null>(null);
 
   useEffect(() => { loadClaims(); }, [filter]);
 
@@ -128,6 +130,9 @@ function ClaimsList() {
                       {(c.status === 'draft' || c.status === 'scrubbed' || c.status === 'scrub_failed') && (
                         <button onClick={() => setReviewClaimId(c.id)} className="text-xs text-purple-600 underline">Review codes</button>
                       )}
+                      {(c.status === 'denied' || c.status === 'rejected') && (
+                        <button onClick={() => setAppealClaimId(c.id)} className="text-xs text-orange-600 underline">Draft appeal</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -138,6 +143,9 @@ function ClaimsList() {
       )}
       {reviewClaimId && (
         <CodeReviewPanel claimId={reviewClaimId} onClose={() => setReviewClaimId(null)} />
+      )}
+      {appealClaimId && (
+        <AppealDraftPanel claimId={appealClaimId} onClose={() => setAppealClaimId(null)} />
       )}
     </div>
   );

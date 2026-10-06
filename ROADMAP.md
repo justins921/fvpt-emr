@@ -49,7 +49,7 @@ AI billing features (the differentiator):
 - [ ] Phase 1: Underpayment detection (fee schedules + ERA line-item parsing → flag shortfalls)
 - [ ] Phase 2: Denial pattern mining (learn from ERA history → pre-submission risk scoring)
 - [x] Phase 3: Documentation-to-code matching (LLM reads note → flags missing/unsupported codes) — migration 022 (code_reviews + clinic_ai_config tables); provider abstraction (Anthropic/OpenAI); BYOK: each clinic uses its OWN encrypted API key (AES-256-GCM, AI_CONFIG_ENCRYPTION_KEY required) set in Settings → AI — never a shared key; env vars (LLM_PROVIDER + API key) are the staging fallback only; AI features are fully optional
-- [ ] Phase 4: Denial appeal drafts (auto-draft from denial + note content)
+- [x] Phase 4: Denial appeal drafts (LLM drafts payer appeal letter from denial reasons + note quotes; editable draft → edited → sent workflow; never auto-sends; reuses Phase 3 BYOK plumbing and 503 handling) — migration 023 (appeal_drafts table) — ALL FOUR AI BILLING DIFFERENTIATORS COMPLETE
 
 ## Discussed — not yet approved
 

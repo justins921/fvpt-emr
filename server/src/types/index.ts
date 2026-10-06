@@ -674,6 +674,9 @@ export enum AuditAction {
   CLAIM_SUBMIT = 'claim.submit',
   CLAIM_EDIT = 'claim.edit',
   CODE_REVIEW_RUN = 'code_review.run',
+  APPEAL_DRAFT_CREATED = 'appeal_draft.created',
+  APPEAL_DRAFT_EDITED = 'appeal_draft.edited',
+  APPEAL_DRAFT_SENT = 'appeal_draft.sent',
   ERA_IMPORT = 'era.import',
   ERA_POST = 'era.post',
 

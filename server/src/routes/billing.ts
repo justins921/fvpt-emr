@@ -6,6 +6,7 @@ import { Permission, AuditAction, ClaimStatus, LedgerEntryType } from '../types'
 import { logAudit } from '../services/audit';
 import { scrubClaim, generate837P, parseERA, postERAToLedger } from '../services/claims';
 import { runCodeReview, getLatestCodeReview } from '../services/codeReview';
+import { draftAppeal, getAppealDrafts, updateAppealDraft } from '../services/appealDraft';
 import { LLMError } from '../services/llm';
 
 const router = Router();
@@ -508,6 +509,48 @@ router.get('/claims/:id/code-review', requirePermission(Permission.CLAIM_VIEW), 
     }
     res.json({ success: true, data: result });
   } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Denial appeal drafts (AI billing Phase 4) ──
+
+// Draft an LLM-assisted appeal letter for a denied claim.
+router.post('/claims/:id/appeal-draft', requirePermission(Permission.CLAIM_SUBMIT), async (req: Request, res: Response) => {
+  try {
+    const result = await draftAppeal(req.params.id, req.auth!.clinicId, req.auth!.userId, req.body);
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    if (err instanceof LLMError) {
+      const status = err.statusCode;
+      // 503 = LLM not configured; surface the setup hint. Never leak note text.
+      res.status(status).json({ success: false, error: err.message, llmRequired: status === 503 });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// List appeal drafts for a claim, newest first (no LLM call).
+router.get('/claims/:id/appeal-drafts', requirePermission(Permission.CLAIM_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await getAppealDrafts(req.params.id, req.auth!.clinicId);
+    res.json({ success: true, data: result });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Edit draft text and/or advance status (draft -> edited -> sent).
+router.put('/appeal-drafts/:id', requirePermission(Permission.CLAIM_SUBMIT), async (req: Request, res: Response) => {
+  try {
+    const result = await updateAppealDraft(req.params.id, req.auth!.clinicId, req.auth!.userId, req.body);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    if (err instanceof LLMError) {
+      res.status(err.statusCode).json({ success: false, error: err.message });
+      return;
+    }
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
