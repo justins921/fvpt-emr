@@ -34,7 +34,75 @@ interface Patient {
   email: string | null;
 }
 
-type Tab = 'users' | 'messages';
+type Tab = 'users' | 'messages' | 'settings';
+
+function PortalSettingsSection() {
+  const [settings, setSettings] = useState<{ portal_code: string | null; allow_patient_self_registration: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true); setError('');
+    try {
+      const res = await api.get<any>('/portal/settings');
+      setSettings(res.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load portal settings');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function toggleRegistration(allow: boolean) {
+    setSaving(true); setError('');
+    try {
+      await api.put('/portal/settings', { allow_patient_self_registration: allow });
+      setSettings((s) => s ? { ...s, allow_patient_self_registration: allow } : s);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update setting');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Spinner /></div>;
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2" role="alert">{error}</div>}
+      <div className="card">
+        <h3 className="font-semibold text-slate-900">Clinic Portal Code</h3>
+        <p className="text-sm text-slate-500 mt-1">
+          Share this code with patients so they can register for portal access on their own.
+        </p>
+        <p className="text-2xl font-mono font-bold text-primary-700 mt-2 tracking-widest">
+          {settings?.portal_code || '—'}
+        </p>
+      </div>
+      <div className="card">
+        <h3 className="font-semibold text-slate-900">Patient Self-Registration</h3>
+        <p className="text-sm text-slate-500 mt-1">
+          When enabled, patients can create their own portal accounts. New accounts stay
+          inactive until staff verify the patient's identity.
+        </p>
+        <label className="flex items-center gap-3 mt-3 cursor-pointer min-h-[44px]">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={settings?.allow_patient_self_registration ?? true}
+            disabled={saving}
+            onChange={(e) => toggleRegistration(e.target.checked)}
+          />
+          <span className="text-sm font-medium text-slate-700">Allow patients to register themselves</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 
 export default function PortalPage() {
   const { user } = useAuth();
@@ -50,8 +118,9 @@ export default function PortalPage() {
       <div className="flex gap-1 border-b">
         <button onClick={() => setTab('users')} className={tabCls('users')}>Portal Users</button>
         <button onClick={() => setTab('messages')} className={tabCls('messages')}>Messages</button>
+        <button onClick={() => setTab('settings')} className={tabCls('settings')}>Settings</button>
       </div>
-      {tab === 'users' ? <PortalUsersSection /> : <PortalMessagesSection />}
+      {tab === 'users' ? <PortalUsersSection /> : tab === 'messages' ? <PortalMessagesSection /> : <PortalSettingsSection />}
     </div>
   );
 }

@@ -77,7 +77,7 @@ export default function PatientLoginPage() {
             </button>
           </form>
           <p className="text-xs text-slate-400 mt-4 text-center">
-            Don't have portal access? Ask your clinic's front desk to set it up.
+            Don't have an account? <Link to="/portal-register" className="underline font-medium">Create one</Link>
           </p>
           <p className="text-xs text-slate-400 mt-2 text-center">
             <Link to="/" className="underline">Back to home</Link>

@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portalApi, getPortalToken, clearPortalToken } from './portalApi';
 import BookAppointment from './BookAppointment';
+import PatientAppointments from './PatientAppointments';
+import PatientIntakeForms from './PatientIntakeForms';
+import PatientBilling from './PatientBilling';
 
 function unwrapList(res: any): any[] {
   if (!res) return [];
@@ -71,9 +74,24 @@ function exerciseRx(item: ProgramItem): string {
   return parts.join(' × ');
 }
 
+function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px min-h-[48px] whitespace-nowrap ${
+        active
+          ? 'border-primary-600 text-primary-700'
+          : 'border-transparent text-slate-500'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function PatientPortal() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<'exercises' | 'booking'>('exercises');
+  const [tab, setTab] = useState<'exercises' | 'booking' | 'appointments' | 'forms' | 'billing'>('exercises');
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -119,33 +137,24 @@ export default function PatientPortal() {
             Sign out
           </button>
         </div>
-        <div className="max-w-2xl mx-auto px-4 flex gap-1">
-          <button
-            onClick={() => setTab('exercises')}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px min-h-[48px] ${
-              tab === 'exercises'
-                ? 'border-primary-600 text-primary-700'
-                : 'border-transparent text-slate-500'
-            }`}
-          >
-            My Exercises
-          </button>
-          <button
-            onClick={() => setTab('booking')}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px min-h-[48px] ${
-              tab === 'booking'
-                ? 'border-primary-600 text-primary-700'
-                : 'border-transparent text-slate-500'
-            }`}
-          >
-            Book Appointment
-          </button>
+        <div className="max-w-2xl mx-auto px-4 flex gap-1 overflow-x-auto">
+          <TabButton active={tab === 'exercises'} onClick={() => setTab('exercises')} label="My Exercises" />
+          <TabButton active={tab === 'booking'} onClick={() => setTab('booking')} label="Book Appointment" />
+          <TabButton active={tab === 'appointments'} onClick={() => setTab('appointments')} label="Appointments" />
+          <TabButton active={tab === 'forms'} onClick={() => setTab('forms')} label="Forms" />
+          <TabButton active={tab === 'billing'} onClick={() => setTab('billing')} label="Billing" />
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4">
         {tab === 'booking' ? (
           <BookAppointment />
+        ) : tab === 'appointments' ? (
+          <PatientAppointments />
+        ) : tab === 'forms' ? (
+          <PatientIntakeForms />
+        ) : tab === 'billing' ? (
+          <PatientBilling />
         ) : loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />

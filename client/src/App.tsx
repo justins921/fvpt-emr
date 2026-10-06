@@ -36,6 +36,7 @@ import AuthorizationsPage from './pages/AuthorizationsPage';
 import ReferringProvidersPage from './pages/ReferringProvidersPage';
 import OnlineBookingPage from './pages/OnlineBookingPage';
 import PatientLoginPage from './pages/portal/PatientLoginPage';
+import PatientRegisterPage from './pages/portal/PatientRegisterPage';
 import PatientPortal from './pages/portal/PatientPortal';
 import InviteAcceptPage from './pages/InviteAcceptPage';
 
@@ -68,6 +69,7 @@ export default function App() {
 
       {/* Patient portal — separate session from staff auth */}
       <Route path="/portal-login" element={<PatientLoginPage />} />
+      <Route path="/portal-register" element={<PatientRegisterPage />} />
       <Route path="/portal" element={<PatientPortal />} />
 
       {/* Staff invite acceptance — public link */}

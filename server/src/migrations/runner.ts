@@ -39,6 +39,7 @@ async function run() {
       { name: '022_code_reviews', module: await import('./022_code_reviews') },
       { name: '023_appeal_drafts', module: await import('./023_appeal_drafts') },
       { name: '024_online_booking', module: await import('./024_online_booking') },
+      { name: '025_portal_expansion', module: await import('./025_portal_expansion') },
     ];
 
     if (direction === 'up') {
