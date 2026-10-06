@@ -18,11 +18,8 @@ const TIERS = [
       'Exercise library (500+)',
       'Patient portal',
       'Authorizations management',
-      'Eligibility verification',
       'Outcome measures & tracking',
-      'Secure messaging & fax',
       'Digital intake forms',
-      'Telehealth built in',
       'Custom reporting',
       'Priority support',
     ],
@@ -44,7 +41,7 @@ const FEATURES = [
   {
     icon: '💰',
     title: 'Get Paid Faster',
-    description: 'Electronic claims, eligibility checks, authorization tracking, and patient statements — all from one screen.',
+    description: 'Claims tracking, authorization management, and patient statements — all from one screen.',
   },
   {
     icon: '🏋️',
@@ -58,46 +55,27 @@ const FEATURES = [
   },
   {
     icon: '🖥️',
-    title: 'Telehealth Built In',
-    description: 'HIPAA-compliant video visits with one-click patient links. No separate app, no extra cost.',
+    title: 'Telehealth Visits',
+    description: 'Video visits with one-click patient links. No separate app, no extra cost.',
   },
 ];
 
-/* ─── Social proof (Marketing Psychology: Social Proof, Authority) ─── */
-const TESTIMONIALS = [
-  {
-    quote: "We cut our documentation time by 40% in the first month. My therapists actually leave on time now.",
-    name: 'Dr. Sarah Chen, DPT',
-    title: 'Owner, Peak Performance PT',
-    metric: '40% faster notes',
-  },
-  {
-    quote: "Switching from Practice Perfect was seamless. EMR OS does everything we needed plus telehealth and HEP — at half the price.",
-    name: 'Mike Rodriguez',
-    title: 'Clinic Director, Atlas Rehab (3 locations)',
-    metric: '50% cost savings',
-  },
-  {
-    quote: "The authorization tracking alone paid for itself. We went from writing off $8K/month in expired auths to zero.",
-    name: 'Jennifer Walsh, PTA',
-    title: 'Billing Manager, Lakeview Physical Therapy',
-    metric: '$96K/year saved',
-  },
-];
+/* ─── Social proof ─── */
+const TESTIMONIALS: { quote: string; name: string; title: string; metric: string }[] = [];
 
 /* ─── FAQ (addresses objections from Page CRO skill) ─── */
 const FAQS = [
   {
     q: 'Is EMR OS HIPAA compliant?',
-    a: 'Yes. EMR OS is fully HIPAA compliant with end-to-end encryption, role-based access controls, complete audit logging, automatic session timeouts, and BAA agreements included at every tier.',
+    a: 'HIPAA compliance is on our pre-launch checklist. Our staging environment is not yet HIPAA compliant and should only be used with demo data — no real patient information. We implement role-based access controls, audit logging, and automatic session timeouts, and will complete a full compliance review before any clinic goes live with real PHI.',
   },
   {
     q: 'Can I migrate from my current EMR?',
-    a: 'Absolutely. We offer free data migration from Practice Perfect, WebPT, Clinicient, TheraOffice, and most other PT EMR systems. Our team handles the entire process — typically completed in under a week.',
+    a: 'We help with data migration from Practice Perfect, WebPT, Clinicient, TheraOffice, and most other PT EMR systems. Reach out and we will scope the migration with you before you commit.',
   },
   {
     q: 'Is there a long-term contract?',
-    a: 'No contracts. EMR OS is month-to-month. You can cancel anytime with 30 days notice — though with a 97% retention rate, most clinics stay for years.',
+    a: 'No contracts. EMR OS is month-to-month. You can cancel anytime with 30 days notice.',
   },
   {
     q: 'Can I try EMR OS before committing?',
@@ -113,7 +91,7 @@ const FAQS = [
   },
   {
     q: 'What about technical support?',
-    a: 'Starter plans include email support with 24-hour response. Professional plans get priority support with 4-hour response. Enterprise plans get a dedicated account manager and phone support.',
+    a: 'Every plan includes email support. Reach out anytime — we respond within one business day.',
   },
 ];
 
@@ -203,7 +181,7 @@ export default function LandingPage() {
             {/* Trust badge */}
             <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm text-green-700 mb-5 sm:mb-6">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              HIPAA Compliant &middot; SOC 2 &middot; 99.9% Uptime
+              Built for PT clinics &middot; Scheduling, documentation, billing
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
@@ -503,7 +481,7 @@ export default function LandingPage() {
             ))}
           </div>
           <p className="text-center text-xs sm:text-sm text-slate-400 mt-6 sm:mt-8">
-            All plans include HIPAA compliance, free onboarding, and data migration. Volume discounts for 5+ providers.
+            All plans include free onboarding. Volume discounts for 5+ providers.
           </p>
         </div>
       </section>

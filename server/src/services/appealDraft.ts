@@ -76,7 +76,7 @@ STRICT RULES:
 - Do not use threatening, emotional, or legalistic language.
 - End with a line: "--- / This is an AI-generated draft. Review and edit before sending."
 
-Return the letter as plain text only. No markdown fences, no JSON, no commentary outside the letter.`;
+Return the letter as plain text only. No markdown fences, no JSON, no commentary outside the letter. Output the complete letter exactly once — do not repeat, summarize, or provide alternate versions.`;
 
 function cents(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return '$0.00';
