@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, CSSProperties } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
+import { accentPreset, accentCssVars } from '../utils/dashboardPrefs';
 
 /* ── Primary nav: always visible ── */
 const PRIMARY_NAV = [
@@ -55,9 +57,13 @@ const SECTIONS = [
 
 export default function Layout() {
   const { user, logout, switchClinic, isSwitchingClinic } = useAuth();
+  const { prefs } = useDashboardPrefs();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const preset = accentPreset(prefs.accent_color);
+  const accentStyle = accentCssVars(preset) as CSSProperties;
 
   const isActive = (path: string) => {
     if (path === '/app') return location.pathname === '/app';
@@ -100,7 +106,11 @@ export default function Layout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
+      <aside
+        data-accent={preset.id}
+        style={accentStyle}
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-primary-900 text-white transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}
+      >
         <div className="flex items-center gap-3 px-4 py-4 border-b border-primary-800">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-primary-900 font-bold text-sm">OS</div>
           <div>
@@ -156,9 +166,13 @@ export default function Layout() {
 
         <div className="p-3 border-t border-primary-800">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-8 h-8 bg-primary-700 rounded-full flex items-center justify-center text-sm font-medium">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </div>
+            {prefs.avatar ? (
+              <img src={prefs.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-8 h-8 bg-primary-700 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+                {user?.firstName?.[0]}{user?.lastName?.[0]}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</div>
               <div className="text-xs text-primary-300 capitalize">{user?.role?.replace('_', ' ')}{user?.clinicName ? ` \u00b7 ${user.clinicName}` : ''}</div>
@@ -181,6 +195,13 @@ export default function Layout() {
             <span className="text-xl">☰</span>
           </button>
           <div className="flex-1" />
+          {prefs.avatar ? (
+            <img src={prefs.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-600">
+              {user?.firstName?.[0]}{user?.lastName?.[0]}
+            </div>
+          )}
           <div className="text-sm text-slate-500">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>

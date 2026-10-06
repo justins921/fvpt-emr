@@ -125,6 +125,7 @@ router.get('/roles', requirePermission(Permission.USER_VIEW), async (req: Reques
 
 // Dashboard preferences for the current user (own data only — no extra permission needed)
 const DASHBOARD_CARD_IDS = ['stats', 'schedule', 'quick_actions'] as const;
+const DASHBOARD_ACCENT_IDS = ['blue', 'emerald', 'violet', 'rose', 'amber', 'slate'] as const;
 
 const dashboardCardSchema = z.object({
   id: z.enum(DASHBOARD_CARD_IDS),
@@ -134,10 +135,19 @@ const dashboardCardSchema = z.object({
 
 const dashboardPrefsSchema = z.object({
   cards: z.array(dashboardCardSchema).min(1).max(10),
+  accent_color: z.enum(DASHBOARD_ACCENT_IDS).optional(),
+  avatar: z
+    .string()
+    .max(300000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=\s]+$/)
+    .nullable()
+    .optional(),
 });
 
 const DEFAULT_DASHBOARD_PREFS = {
   cards: DASHBOARD_CARD_IDS.map((id, i) => ({ id, visible: true, order: i })),
+  accent_color: 'blue' as const,
+  avatar: null as string | null,
 };
 
 function normalizeDashboardPrefs(raw: any) {
@@ -157,6 +167,11 @@ function normalizeDashboardPrefs(raw: any) {
         order: Number.isInteger(c?.order) ? (c!.order as number) : i,
       };
     }).sort((a, b) => a.order - b.order),
+    accent_color: DASHBOARD_ACCENT_IDS.includes(raw?.accent_color) ? raw.accent_color : 'blue',
+    avatar:
+      typeof raw?.avatar === 'string' && raw.avatar.startsWith('data:image/')
+        ? raw.avatar
+        : null,
   };
 }
 

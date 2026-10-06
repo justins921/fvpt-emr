@@ -31,3 +31,19 @@
   .badge-blue { @apply badge bg-blue-100 text-blue-800; }
   .badge-gray { @apply badge bg-slate-100 text-slate-800; }
 }
+
+/* Sidebar accent theming — per-user accent choice overrides the Tailwind
+   primary-* utilities inside the sidebar. Scoped to aside[data-accent] so the
+   rest of the app keeps the default blue. Higher specificity than the
+   utilities, no !important needed. */
+aside[data-accent] .bg-primary-900 { background-color: var(--accent-900); }
+aside[data-accent] .bg-primary-800 { background-color: var(--accent-800); }
+aside[data-accent] .bg-primary-700 { background-color: var(--accent-700); }
+aside[data-accent] .text-primary-200 { color: var(--accent-200); }
+aside[data-accent] .text-primary-300 { color: var(--accent-300); }
+aside[data-accent] .text-primary-400 { color: var(--accent-400); }
+aside[data-accent] .text-primary-900 { color: var(--accent-900); }
+aside[data-accent] .border-primary-800 { border-color: var(--accent-800); }
+aside[data-accent] .border-primary-700 { border-color: var(--accent-700); }
+aside[data-accent] .hover\:bg-primary-800\/50:hover { background-color: color-mix(in srgb, var(--accent-800) 50%, transparent); }
+aside[data-accent] .focus\:border-primary-500:focus { border-color: var(--accent-400); }
