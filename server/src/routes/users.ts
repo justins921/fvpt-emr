@@ -75,6 +75,21 @@ router.post('/', requirePermission(Permission.USER_CREATE), async (req: Request,
   }
 });
 
+// Roles reference for the admin UI (no migration needed — derived from ROLE_PERMISSIONS)
+// NOTE: must be registered before GET /:id so "roles" isn't captured as an id
+router.get('/roles', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
+  try {
+    const { ROLE_PERMISSIONS } = await import('../types');
+    const data = (Object.keys(ROLE_PERMISSIONS) as Role[]).map((role) => ({
+      role,
+      permissions: ROLE_PERMISSIONS[role],
+    }));
+    res.json({ success: true, data });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Get single user
 router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
@@ -93,10 +108,64 @@ router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request,
   }
 });
 
+// Roles that can fully administer the clinic — at least one active one must always exist
+const PRIVILEGED_ROLES = [Role.OWNER, Role.ADMIN];
+
 // Update user
 router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request, res: Response) => {
   try {
-    const { firstName, lastName, role, credential, npi, licenseNumber, isActive } = req.body;
+    const updateSchema = z.object({
+      firstName: z.string().min(1).max(100).optional(),
+      lastName: z.string().min(1).max(100).optional(),
+      role: z.nativeEnum(Role).optional(),
+      credential: z.enum(VALID_CREDENTIALS).optional().nullable(),
+      npi: z.string().max(10).optional(),
+      licenseNumber: z.string().max(50).optional(),
+      isActive: z.boolean().optional(),
+    });
+    const input = updateSchema.parse(req.body);
+    const { firstName, lastName, role, credential, npi, licenseNumber, isActive } = input;
+
+    // Guard 1: nobody can change their own role (prevents self-lockout)
+    if (role && req.params.id === req.auth!.userId) {
+      res.status(403).json({ success: false, error: 'You cannot change your own role. Ask another administrator.' });
+      return;
+    }
+
+    // Guard 2: only owners can grant owner/admin roles
+    if (role && PRIVILEGED_ROLES.includes(role) && req.auth!.role !== Role.OWNER) {
+      res.status(403).json({ success: false, error: 'Only owners can grant owner or admin roles' });
+      return;
+    }
+
+    if (role) {
+      // Look up the target's current role
+      const target = await query(
+        `SELECT role, is_active FROM users WHERE id = $1 AND clinic_id = $2`,
+        [req.params.id, req.auth!.clinicId]
+      );
+      if (target.rows.length === 0) {
+        res.status(404).json({ success: false, error: 'User not found' });
+        return;
+      }
+      const currentRole = target.rows[0].role as Role;
+      // Guard 3: never demote the last remaining owner/admin
+      if (PRIVILEGED_ROLES.includes(currentRole) && !PRIVILEGED_ROLES.includes(role) && target.rows[0].is_active) {
+        const remaining = await query(
+          `SELECT COUNT(*)::int AS n FROM users
+           WHERE clinic_id = $1 AND role IN ('owner','admin') AND is_active = true AND id <> $2`,
+          [req.auth!.clinicId, req.params.id]
+        );
+        if (remaining.rows[0].n === 0) {
+          res.status(403).json({
+            success: false,
+            error: 'Cannot demote the last remaining owner/admin. Promote another user first.',
+          });
+          return;
+        }
+      }
+    }
+
     const result = await query(
       `UPDATE users SET
         first_name = COALESCE($3, first_name),
@@ -120,10 +189,15 @@ router.put('/:id', requirePermission(Permission.USER_EDIT), async (req: Request,
       action: AuditAction.USER_EDIT,
       resourceType: 'user',
       resourceId: req.params.id,
+      details: role ? { roleChangedTo: role } : undefined,
       req,
     });
     res.json({ success: true, data: result.rows[0] });
-  } catch {
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

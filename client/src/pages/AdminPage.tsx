@@ -9,6 +9,7 @@ export default function AdminPage() {
   const { user } = useAuth();
   const tabs = [
     { path: '/app/admin', label: 'Users' },
+    { path: '/app/admin/roles', label: 'Roles & Permissions' },
     { path: '/app/admin/audit', label: 'Audit Log' },
     { path: '/app/admin/settings', label: 'Settings' },
     { path: '/app/admin/import', label: 'Import Data' },
@@ -29,7 +30,8 @@ export default function AdminPage() {
         ))}
       </div>
       <Routes>
-        <Route index element={<UsersManager currentUserId={user?.id} />} />
+        <Route index element={<UsersManager currentUserId={user?.id} currentUserRole={user?.role} />} />
+        <Route path="roles" element={<RoleMatrix />} />
         <Route path="audit" element={<AuditViewer />} />
         <Route path="settings" element={<SettingsPanel />} />
         <Route path="import" element={<ImportPage />} />
@@ -38,19 +40,34 @@ export default function AdminPage() {
   );
 }
 
-function UsersManager({ currentUserId }: { currentUserId?: string }) {
+const ALL_ROLES = ['owner', 'admin', 'therapist', 'front_desk', 'biller', 'read_only', 'dev'] as const;
+const PRIVILEGED_ROLES = ['owner', 'admin'];
+const CREDENTIALS = ['PT', 'DPT', 'PTA', 'ATC', 'OT', 'SLP', 'MD', 'DO', 'NP', 'PA', 'Office'];
+
+function roleLabel(r: string) { return r.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+
+function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: string; currentUserRole?: string }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [editing, setEditing] = useState<any | null>(null);
+  const [editError, setEditError] = useState('');
+  const [confirmingRoleChange, setConfirmingRoleChange] = useState(false);
+  const [editRole, setEditRole] = useState('');
 
   useEffect(() => { loadUsers(); }, []);
 
   async function loadUsers() {
-    try { const res = await api.get<any>('/users'); setUsers(res.data || []); } catch {} finally { setLoading(false); }
+    try {
+      const res = await api.get<any>('/users');
+      setUsers(res.data || []);
+    } catch { /* keep existing list */ } finally { setLoading(false); }
   }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setCreateError('');
     const fd = new FormData(e.currentTarget);
     try {
       await api.post('/users', {
@@ -60,13 +77,61 @@ function UsersManager({ currentUserId }: { currentUserId?: string }) {
         npi: fd.get('npi') || undefined,
       });
       setShowForm(false); loadUsers();
-    } catch (err) { alert(err instanceof ApiError ? err.message : 'Failed'); }
+    } catch (err) { setCreateError(err instanceof ApiError ? err.message : 'Failed to create user'); }
   }
 
   async function deactivateUser(id: string) {
-    if (id === currentUserId) { alert("You can't deactivate your own account."); return; }
-    if (!confirm('Deactivate this user? Their sessions will be revoked.')) return;
+    if (id === currentUserId) { return; }
     try { await api.post(`/users/${id}/deactivate`); loadUsers(); } catch {}
+  }
+
+  const isSelf = (u: any) => u.id === currentUserId;
+  const privilegedCount = users.filter(u => PRIVILEGED_ROLES.includes(u.role) && u.is_active).length;
+  const isLastPrivileged = (u: any) =>
+    PRIVILEGED_ROLES.includes(u.role) && u.is_active && privilegedCount <= 1;
+
+  function openEdit(u: any) {
+    setEditing({ ...u });
+    setEditRole(u.role);
+    setEditError('');
+    setConfirmingRoleChange(false);
+  }
+
+  function roleChangeBlocked(u: any, newRole: string): string | null {
+    if (isSelf(u) && newRole !== u.role) {
+      return "You can't change your own role. Ask another administrator.";
+    }
+    if (PRIVILEGED_ROLES.includes(newRole) && currentUserRole !== 'owner') {
+      return 'Only owners can grant owner or admin roles.';
+    }
+    if (isLastPrivileged(u) && !PRIVILEGED_ROLES.includes(newRole)) {
+      return 'Cannot demote the last remaining owner/admin. Promote another user first.';
+    }
+    return null;
+  }
+
+  async function handleEditSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editing) return;
+    setEditError('');
+    const fd = new FormData(e.currentTarget);
+    const newRole = editRole || editing.role;
+    const blocked = roleChangeBlocked(editing, newRole);
+    if (blocked) { setEditError(blocked); return; }
+    // Two-click confirm when the role is actually changing
+    if (newRole !== editing.role && !confirmingRoleChange) {
+      setConfirmingRoleChange(true);
+      return;
+    }
+    try {
+      await api.put(`/users/${editing.id}`, {
+        firstName: fd.get('firstName'), lastName: fd.get('lastName'),
+        role: newRole, credential: fd.get('credential') || null,
+        npi: fd.get('npi') || null, licenseNumber: fd.get('licenseNumber') || null,
+        isActive: fd.get('isActive') === 'on',
+      });
+      setEditing(null); setConfirmingRoleChange(false); loadUsers();
+    } catch (err) { setEditError(err instanceof ApiError ? err.message : 'Failed to update user'); }
   }
 
   if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>;
@@ -75,7 +140,7 @@ function UsersManager({ currentUserId }: { currentUserId?: string }) {
     <div className="space-y-4">
       <div className="flex justify-between">
         <h3 className="font-semibold">Users</h3>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">+ New User</button>
+        <button onClick={() => { setShowForm(!showForm); setCreateError(''); }} className="btn-primary text-sm">+ New User</button>
       </div>
       {showForm && (
         <form onSubmit={handleCreate} className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -84,28 +149,20 @@ function UsersManager({ currentUserId }: { currentUserId?: string }) {
           <div><label className="label">First Name *</label><input name="firstName" required className="input" /></div>
           <div><label className="label">Last Name *</label><input name="lastName" required className="input" /></div>
           <div><label className="label">Role *</label>
-            <select name="role" required className="input">
-              <option value="therapist">Therapist</option>
-              <option value="front_desk">Front Desk</option>
-              <option value="biller">Biller</option>
-              <option value="read_only">Read Only</option>
-              <option value="admin">Admin</option>
-              <option value="dev">Developer</option>
+            <select name="role" required className="input" defaultValue="therapist">
+              {ALL_ROLES.filter(r => currentUserRole === 'owner' || !PRIVILEGED_ROLES.includes(r)).map(r => (
+                <option key={r} value={r}>{roleLabel(r)}</option>
+              ))}
             </select>
           </div>
           <div><label className="label">Credential</label>
             <select name="credential" className="input">
               <option value="">None</option>
-              <option value="PT">PT</option>
-              <option value="DPT">DPT</option>
-              <option value="PTA">PTA</option>
-              <option value="ATC">ATC</option>
-              <option value="OT">OT</option>
-              <option value="SLP">SLP</option>
-              <option value="Office">Office</option>
+              {CREDENTIALS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div><label className="label">NPI</label><input name="npi" className="input" /></div>
+          {createError && <div className="sm:col-span-2 lg:col-span-3 text-sm text-red-600">{createError}</div>}
           <div className="sm:col-span-2 lg:col-span-3 flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
             <button type="submit" className="btn-primary">Create User</button>
@@ -132,12 +189,209 @@ function UsersManager({ currentUserId }: { currentUserId?: string }) {
                 <td className="px-4 py-3">{u.credential ? <span className="badge-blue">{u.credential}</span> : <span className="text-slate-400">-</span>}</td>
                 <td className="px-4 py-3"><span className={u.is_active ? 'badge-green' : 'badge-red'}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
-                <td className="px-4 py-3">{u.is_active && u.id !== currentUserId && <button onClick={() => deactivateUser(u.id)} className="text-xs text-red-600 underline">Deactivate</button>}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <button onClick={() => openEdit(u)} className="text-xs text-primary-600 underline mr-3">Edit</button>
+                  {u.is_active && !isSelf(u) && <DeactivateButton onDeactivate={() => deactivateUser(u.id)} />}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEditing(null)}>
+          <form onSubmit={handleEditSave} onClick={e => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-3" aria-label="Edit user">
+            <h3 className="font-semibold text-lg">Edit User — {editing.last_name}, {editing.first_name}</h3>
+            {isSelf(editing) && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                This is your own account — the role can't be changed here. Ask another administrator if your role needs to change.
+              </p>
+            )}
+            {isLastPrivileged(editing) && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                This is the last remaining owner/admin. Demote or deactivate only after promoting another user.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">First Name *</label><input name="firstName" required defaultValue={editing.first_name} className="input" /></div>
+              <div><label className="label">Last Name *</label><input name="lastName" required defaultValue={editing.last_name} className="input" /></div>
+              <div><label className="label">Role *</label>
+                <select name="role" required className="input" value={editRole}
+                  disabled={isSelf(editing)}
+                  onChange={e => { setEditRole(e.target.value); setConfirmingRoleChange(false); }}>
+                  {ALL_ROLES.map(r => (
+                    <option key={r} value={r}
+                      disabled={PRIVILEGED_ROLES.includes(r) && currentUserRole !== 'owner'}>
+                      {roleLabel(r)}{PRIVILEGED_ROLES.includes(r) && currentUserRole !== 'owner' ? ' (owners only)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div><label className="label">Credential</label>
+                <select name="credential" className="input" defaultValue={editing.credential || ''}>
+                  <option value="">None</option>
+                  {CREDENTIALS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div><label className="label">NPI</label><input name="npi" defaultValue={editing.npi || ''} className="input" /></div>
+              <div><label className="label">License #</label><input name="licenseNumber" defaultValue={editing.license_number || ''} className="input" /></div>
+              <div className="col-span-2 flex items-center gap-2">
+                <input id="edit-isActive" name="isActive" type="checkbox" defaultChecked={editing.is_active}
+                  disabled={isSelf(editing)} className="h-4 w-4" />
+                <label htmlFor="edit-isActive" className="text-sm">Active</label>
+              </div>
+            </div>
+            {editError && <p className="text-sm text-red-600" role="alert">{editError}</p>}
+            {confirmingRoleChange ? (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3" aria-live="polite">
+                <p className="text-sm mb-2">
+                  Change <strong>{editing.last_name}, {editing.first_name}</strong>'s role from{' '}
+                  <strong>{roleLabel(editing.role)}</strong> to <strong>{roleLabel(editRole)}</strong>?
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setConfirmingRoleChange(false)} className="btn-secondary text-sm">Back</button>
+                  <button type="submit" className="btn-primary text-sm">Confirm Role Change</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setEditing(null)} className="btn-secondary">Cancel</button>
+                <button type="submit" className="btn-primary">Save Changes</button>
+              </div>
+            )}
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DeactivateButton({ onDeactivate }: { onDeactivate: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <span className="text-xs" aria-live="polite">
+        <span className="text-slate-600 mr-2">Deactivate? Sessions revoked.</span>
+        <button onClick={() => { setConfirming(false); onDeactivate(); }} className="text-red-600 underline mr-2">Confirm</button>
+        <button onClick={() => setConfirming(false)} className="text-slate-500 underline">Back</button>
+      </span>
+    );
+  }
+  return <button onClick={() => setConfirming(true)} className="text-xs text-red-600 underline">Deactivate</button>;
+}
+
+// ── Role permission matrix (read-only reference, data from GET /users/roles) ──
+
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  owner: 'Full access to everything, including managing owners and clinic settings.',
+  admin: 'Full access to everything except managing owners.',
+  dev: 'Full access in development; read-only in production.',
+  therapist: 'Clinical care: patients, notes, HEP, and treatment documentation.',
+  front_desk: 'Front office: scheduling, intake, check-in, and patient communication.',
+  biller: 'Revenue cycle: billing, claims, payments, and authorizations.',
+  read_only: 'View-only access. Cannot create, edit, or delete anything.',
+};
+
+const CAPABILITY_AREAS: { label: string; perms: string[] }[] = [
+  { label: 'Patients', perms: ['patient:create', 'patient:edit', 'patient:view', 'patient:delete', 'patient:export'] },
+  { label: 'Scheduling', perms: ['schedule:create', 'schedule:edit', 'schedule:view', 'schedule:delete'] },
+  { label: 'Clinical notes', perms: ['note:create', 'note:edit', 'note:view', 'note:sign', 'note:amend', 'attachment:upload', 'attachment:view', 'attachment:delete', 'poc:view', 'poc:create', 'poc:edit', 'outcome:view', 'outcome:create'] },
+  { label: 'HEP', perms: ['hep:view', 'hep:create', 'hep:edit', 'hep:delete'] },
+  { label: 'Billing & claims', perms: ['billing:view', 'billing:create', 'billing:edit', 'billing:export', 'claim:submit', 'claim:view', 'era:import', 'ledger:view', 'ledger:edit', 'payment:view', 'payment:process', 'workers_comp:view', 'workers_comp:manage', 'mips:view', 'mips:manage'] },
+  { label: 'Authorizations', perms: ['authorization:view', 'authorization:manage'] },
+  { label: 'Messaging & fax', perms: ['messaging:view', 'messaging:send', 'messaging:manage', 'fax:send', 'fax:view'] },
+  { label: 'Internal notes', perms: ['patient_note:view', 'patient_note:create', 'patient_note:manage'] },
+  { label: 'Communication consent', perms: ['consent:view', 'consent:manage'] },
+  { label: 'Intake forms', perms: ['intake:view', 'intake:create', 'intake:manage'] },
+  { label: 'Eligibility', perms: ['eligibility:check', 'eligibility:view'] },
+  { label: 'Tasks', perms: ['task:view', 'task:create', 'task:manage'] },
+  { label: 'Patient portal', perms: ['portal:manage'] },
+  { label: 'Administration', perms: ['clinic:manage', 'clinic:view', 'user:create', 'user:edit', 'user:view', 'user:deactivate', 'audit:view', 'data:import', 'backup:manage', 'settings:manage', 'location:view', 'location:manage', 'fhir:manage'] },
+  { label: 'Other', perms: ['telehealth:create', 'telehealth:view', 'waitlist:view', 'waitlist:manage', 'recall:view', 'recall:manage', 'referring_provider:view', 'referring_provider:manage', 'text_expander:view', 'text_expander:manage', 'note_template:view', 'note_template:manage', 'support:create', 'support:manage', 'report:view'] },
+];
+
+function accessSummary(rolePerms: string[], areaPerms: string[]): string {
+  const have = areaPerms.filter(p => rolePerms.includes(p));
+  if (have.length === 0) return '—';
+  const verbs = [...new Set(have.map(p => p.split(':')[1]))];
+  if (verbs.includes('manage')) return 'Full';
+  if (verbs.length === 1 && verbs[0] === 'view') return 'View';
+  return verbs.map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(', ');
+}
+
+function RoleMatrix() {
+  const [roles, setRoles] = useState<{ role: string; permissions: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get<any>('/users/roles');
+        setRoles(res.data || []);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load roles');
+      } finally { setLoading(false); }
+    })();
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>;
+  if (error) return <div className="card text-red-600 text-sm">{error}</div>;
+
+  const order = ['owner', 'admin', 'therapist', 'front_desk', 'biller', 'read_only', 'dev'];
+  const sorted = [...roles].sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-semibold">Roles & Permissions</h3>
+        <p className="text-sm text-slate-500 mt-1">
+          What each role can do in the clinic. Assign roles on the Users tab — changes are audit-logged.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {sorted.map(r => (
+          <div key={r.role} className="card">
+            <h4 className="font-semibold capitalize">{r.role.replace('_', ' ')}</h4>
+            <p className="text-xs text-slate-500 mt-1">{ROLE_DESCRIPTIONS[r.role] || ''}</p>
+          </div>
+        ))}
+      </div>
+      <div className="card p-0 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b">
+            <tr>
+              <th className="text-left px-4 py-3 sticky left-0 bg-slate-50">Capability</th>
+              {sorted.map(r => (
+                <th key={r.role} className="text-left px-4 py-3 capitalize whitespace-nowrap">{r.role.replace('_', ' ')}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {CAPABILITY_AREAS.map(area => (
+              <tr key={area.label} className="hover:bg-slate-50">
+                <td className="px-4 py-2 font-medium sticky left-0 bg-white whitespace-nowrap">{area.label}</td>
+                {sorted.map(r => {
+                  const s = accessSummary(r.permissions, area.perms);
+                  return (
+                    <td key={r.role} className="px-4 py-2 text-xs whitespace-nowrap">
+                      {s === '—' ? <span className="text-slate-300">—</span>
+                        : s === 'Full' ? <span className="badge-green">Full</span>
+                        : s === 'View' ? <span className="badge-gray">View</span>
+                        : <span className="text-slate-600">{s}</span>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-400">
+        "Full" means create/edit/delete/manage; "View" is read-only; otherwise the listed actions apply. Developer is full access in development, read-only in production.
+      </p>
     </div>
   );
 }

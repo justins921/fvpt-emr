@@ -30,6 +30,7 @@ Living document — updated 2026-10-05. Lives in the repo root as ROADMAP.md.
 - [x] Internal patient notes (staff-only, pinned to chart, categories, soft-delete, out of legal record, audited) — migration 014 — QA PASS 2026-10-05
 - [x] Communication preferences (per-patient SMS/email opt in/out; STOP/START/HELP keyword handling in webhook; consent gate on send, bulk send, and daily-reminder cron with skip logging; staff UI + consent history + audit log; opt-in checkboxes on intake form) — migration 015 — QA PASS 2026-10-05
 - [x] HEP program templates (built on existing exercise_programs.is_template — no duplicate tables; Templates tab with list/rename/delete/use-for-patient; "Start from template" in program builder; "Save as Template" from builder and from archived programs; template assign with name override; program status updates fixed) — migration 016 (is_active soft-delete on exercise_programs) — PENDING migration run + QA
+- [x] Role management UI (no migration): edit-user dialog (role/name/credential/NPI/license/active) with two-click confirm on role change; self-role-change blocked; last owner/admin demotion blocked (client + server); only owners can grant owner/admin; new "Roles & Permissions" admin tab with per-role capability matrix derived live from ROLE_PERMISSIONS; role changes audit-logged
 
 ## QA rounds (2026-10-05)
 
@@ -67,6 +68,5 @@ AI billing features (the differentiator):
 - Patient portal expansion (paperwork, scheduling, payments, records access)
 - Patient HEP check-off in portal (full exercise detail; per-exercise completion + pain/difficulty → adherence log; therapist sees completion) — QUEUED after HEP templates
 - User onboarding flow (new clinic signup, invite flow, guided setup)
-- Role management UI (roles exist: owner/admin/therapist/front_desk/biller/read_only + granular permissions — needs admin UI to assign/manage)
 - Customizable dashboard (user-personalizable widgets/layout)
 - (Add new ideas here)
