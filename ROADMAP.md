@@ -67,6 +67,6 @@ AI billing features (the differentiator):
 - Electronic prior auth submission (beyond packet generation — needs payer APIs)
 - Real-time claim status tracking
 - Patient portal expansion (paperwork, scheduling, payments, records access)
-- Patient HEP check-off in portal (full exercise detail; per-exercise completion + pain/difficulty → adherence log; therapist sees completion) — QUEUED after HEP templates
+- Patient HEP check-off in portal — BUILT 2026-10-05 (migration 018: logged_by_type on hep_adherence_logs): patient portal login (/portal-login), "My Exercises" view with full exercise detail (images, instructions, sets/reps/hold), per-exercise tap-to-check-off, session log with pain 0-10 + difficulty 1-5 + notes → hep_adherence_logs marked logged_by_type='patient'; adherence history view; staff adherence endpoint now returns logged_by_type. PENDING migration run + QA
 - User onboarding flow (new clinic signup, invite flow, guided setup)
 - (Add new ideas here)

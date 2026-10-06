@@ -34,6 +34,8 @@ import LocationsPage from './pages/LocationsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import AuthorizationsPage from './pages/AuthorizationsPage';
 import ReferringProvidersPage from './pages/ReferringProvidersPage';
+import PatientLoginPage from './pages/portal/PatientLoginPage';
+import PatientPortal from './pages/portal/PatientPortal';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -61,6 +63,10 @@ export default function App() {
       {/* Public landing page for unauthenticated visitors */}
       <Route path="/" element={isAuthenticated ? <Navigate to="/app" /> : <LandingPage />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/app" /> : <LoginPage />} />
+
+      {/* Patient portal — separate session from staff auth */}
+      <Route path="/portal-login" element={<PatientLoginPage />} />
+      <Route path="/portal" element={<PatientPortal />} />
 
       {/* Protected app routes */}
       <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

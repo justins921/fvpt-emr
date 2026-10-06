@@ -46,7 +46,7 @@ declare global {
   }
 }
 
-function authenticatePortalUser(req: Request, res: Response, next: NextFunction): void {
+export function authenticatePortalUser(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ success: false, error: 'Authentication required' });
@@ -71,7 +71,7 @@ function authenticatePortalUser(req: Request, res: Response, next: NextFunction)
 /**
  * Ensure the portal user account is still active before servicing any request.
  */
-async function requireActivePortalUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireActivePortalUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.portal) {
     res.status(401).json({ success: false, error: 'Authentication required' });
     return;

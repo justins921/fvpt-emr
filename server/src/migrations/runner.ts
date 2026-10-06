@@ -32,6 +32,7 @@ async function run() {
       { name: '015_communication_consent', module: await import('./015_communication_consent') },
       { name: '016_hep_template_soft_delete', module: await import('./016_hep_template_soft_delete') },
       { name: '017_dashboard_preferences', module: await import('./017_dashboard_preferences') },
+      { name: '018_hep_adherence_logged_by_type', module: await import('./018_hep_adherence_logged_by_type') },
     ];
 
     if (direction === 'up') {

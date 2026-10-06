@@ -698,6 +698,7 @@ router.get('/programs/:id/adherence', requirePermission(Permission.HEP_VIEW), as
     const result = await query(
       `SELECT hal.id, hal.completed_at, hal.completion_percent, hal.pain_level,
               hal.difficulty_rating, hal.notes, hal.exercises_completed, hal.created_at,
+              hal.logged_by_type,
               u.first_name as logged_by_first_name, u.last_name as logged_by_last_name
        FROM hep_adherence_logs hal
        LEFT JOIN users u ON hal.logged_by = u.id
