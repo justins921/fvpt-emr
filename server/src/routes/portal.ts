@@ -808,6 +808,13 @@ router.use('/patient', patientRouter);
 
 // Mount staff routes LAST — the staff auth middleware would otherwise
 // intercept the public /patient/login route defined above.
-router.use('/', staffRouter);
+// Skip /patient/* paths so they fall through to portal-patient.ts
+// (which has the full patient route set) instead of hitting staff auth.
+router.use('/', (req, res, next) => {
+  if (req.path.startsWith('/patient/')) {
+    return next('router');
+  }
+  staffRouter(req, res, next);
+});
 
 export default router;
