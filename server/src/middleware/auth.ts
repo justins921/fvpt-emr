@@ -23,7 +23,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   const token = authHeader.substring(7);
 
   try {
-    const payload = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
+    const payload = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
     req.auth = payload;
     next();
   } catch (err) {

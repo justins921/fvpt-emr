@@ -34,6 +34,7 @@ import textExpanderRoutes from './routes/text-expanders';
 import reportingRoutes from './routes/reporting';
 import portalRoutes from './routes/portal';
 import portalHepRoutes from './routes/portal-hep';
+import { onlineBookingRouter, portalBookingRouter } from './routes/online-booking';
 import inviteRoutes from './routes/invites';
 import workersCompRoutes from './routes/workers-comp';
 import mipsRoutes from './routes/mips';
@@ -83,52 +84,6 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-// Temporary diagnostic endpoint — remove after debugging login
-app.get('/api/debug/login-check', async (_req, res) => {
-  const { query: dbQuery } = await import('./db');
-  const diagnostics: Record<string, unknown> = {
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL: process.env.VERCEL,
-      hasDbUrl: !!process.env.DATABASE_URL,
-      hasPostgresUrl: !!process.env.POSTGRES_URL,
-      hasJwtSecret: !!process.env.JWT_SECRET,
-      hasPhiKey: !!process.env.PHI_ENCRYPTION_KEY,
-    },
-  };
-  try {
-    const dbCheck = await dbQuery('SELECT 1 AS ok');
-    diagnostics.dbConnected = dbCheck.rows.length > 0;
-  } catch (e) {
-    diagnostics.dbConnected = false;
-    diagnostics.dbError = e instanceof Error ? e.message : String(e);
-  }
-  try {
-    const cols = await dbQuery(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' ORDER BY ordinal_position`
-    );
-    diagnostics.userColumns = cols.rows.map((r: Record<string, unknown>) => r.column_name);
-  } catch (e) {
-    diagnostics.userColumnsError = e instanceof Error ? e.message : String(e);
-  }
-  try {
-    const userCount = await dbQuery('SELECT COUNT(*) AS cnt FROM users');
-    diagnostics.userCount = userCount.rows[0].cnt;
-  } catch (e) {
-    diagnostics.userCountError = e instanceof Error ? e.message : String(e);
-  }
-  try {
-    // Check if admin user exists (no PHI — just username and role)
-    const admin = await dbQuery(
-      `SELECT username, role, is_active, clinic_id FROM users WHERE username = 'admin' LIMIT 1`
-    );
-    diagnostics.adminUser = admin.rows.length > 0 ? admin.rows[0] : 'NOT FOUND';
-  } catch (e) {
-    diagnostics.adminUserError = e instanceof Error ? e.message : String(e);
-  }
-  res.json({ success: true, diagnostics });
-});
-
 // ── Existing API routes ──
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -159,7 +114,9 @@ app.use('/api/recall', recallRoutes);
 app.use('/api/text-expanders', textExpanderRoutes);
 app.use('/api/reporting', reportingRoutes);
 app.use('/api/portal/patient/hep', portalHepRoutes);
+app.use('/api/portal/booking', portalBookingRouter);
 app.use('/api/portal', portalRoutes);
+app.use('/api/online-booking', onlineBookingRouter);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/workers-comp', workersCompRoutes);
 app.use('/api/mips', mipsRoutes);

@@ -8,6 +8,7 @@ import { query } from '../db';
 import { Permission, AuditAction } from '../types';
 import { logAudit } from '../services/audit';
 import { config } from '../config';
+import { loginLimiter } from '../middleware/security';
 
 const router = Router();
 
@@ -457,7 +458,7 @@ patientRouter.use(authenticatePortalUser, requireActivePortalUser);
 
 // ── POST /patient/login — Portal user login ─────────────────────────────────
 // NOTE: login does NOT go through patientRouter (no auth required)
-router.post('/patient/login', async (req: Request, res: Response) => {
+router.post('/patient/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const schema = z.object({
       email: z.string().email(),

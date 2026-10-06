@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portalApi, getPortalToken, clearPortalToken } from './portalApi';
+import BookAppointment from './BookAppointment';
 
 function unwrapList(res: any): any[] {
   if (!res) return [];
@@ -72,6 +73,7 @@ function exerciseRx(item: ProgramItem): string {
 
 export default function PatientPortal() {
   const navigate = useNavigate();
+  const [tab, setTab] = useState<'exercises' | 'booking'>('exercises');
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -112,15 +114,39 @@ export default function PatientPortal() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-slate-900">My Exercises</h1>
+          <h1 className="text-lg font-bold text-slate-900">Patient Portal</h1>
           <button onClick={signOut} className="text-sm text-slate-500 underline min-h-[44px] px-2">
             Sign out
+          </button>
+        </div>
+        <div className="max-w-2xl mx-auto px-4 flex gap-1">
+          <button
+            onClick={() => setTab('exercises')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px min-h-[48px] ${
+              tab === 'exercises'
+                ? 'border-primary-600 text-primary-700'
+                : 'border-transparent text-slate-500'
+            }`}
+          >
+            My Exercises
+          </button>
+          <button
+            onClick={() => setTab('booking')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px min-h-[48px] ${
+              tab === 'booking'
+                ? 'border-primary-600 text-primary-700'
+                : 'border-transparent text-slate-500'
+            }`}
+          >
+            Book Appointment
           </button>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4">
-        {loading ? (
+        {tab === 'booking' ? (
+          <BookAppointment />
+        ) : loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>

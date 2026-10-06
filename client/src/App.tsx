@@ -34,6 +34,7 @@ import LocationsPage from './pages/LocationsPage';
 import PaymentsPage from './pages/PaymentsPage';
 import AuthorizationsPage from './pages/AuthorizationsPage';
 import ReferringProvidersPage from './pages/ReferringProvidersPage';
+import OnlineBookingPage from './pages/OnlineBookingPage';
 import PatientLoginPage from './pages/portal/PatientLoginPage';
 import PatientPortal from './pages/portal/PatientPortal';
 import InviteAcceptPage from './pages/InviteAcceptPage';
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="fax" element={<FaxPage />} />
         <Route path="eligibility" element={<EligibilityPage />} />
         <Route path="portal/*" element={<PortalPage />} />
+        <Route path="online-booking" element={<OnlineBookingPage />} />
         <Route path="workers-comp/*" element={<WorkersCompPage />} />
         <Route path="mips" element={<MIPSPage />} />
         <Route path="fhir" element={<FHIRPage />} />

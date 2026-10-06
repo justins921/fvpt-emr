@@ -47,6 +47,7 @@ const SECTIONS = [
     items: [
       { path: '/app/locations', label: 'Locations', icon: '⌂' },
       { path: '/app/portal', label: 'Patient Portal', icon: '⊞' },
+      { path: '/app/online-booking', label: 'Online Booking', icon: '◷' },
       { path: '/app/workers-comp', label: "Workers' Comp", icon: '⛑' },
       { path: '/app/mips', label: 'MIPS', icon: '★' },
       { path: '/app/fhir', label: 'FHIR', icon: '⇄' },

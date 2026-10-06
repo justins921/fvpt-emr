@@ -79,8 +79,15 @@ function loadConfig() {
 
   const cfg = result.success ? result.data : envSchema.parse({});
 
-  // Warn about insecure defaults in production (log only, don't crash)
+  // Fail closed in production: refuse to boot with publicly-known default secrets
   if (cfg.NODE_ENV === 'production') {
+    if (cfg.JWT_SECRET.includes('dev-secret')) {
+      throw new Error('FATAL: JWT_SECRET is using the default value — set it in environment variables');
+    }
+    if (cfg.PHI_ENCRYPTION_KEY.includes('dev-phi')) {
+      throw new Error('FATAL: PHI_ENCRYPTION_KEY is using the default value — set it in environment variables');
+    }
+  } else {
     if (cfg.JWT_SECRET.includes('dev-secret')) {
       console.warn('WARNING: JWT_SECRET is using the default value — set it in environment variables');
     }

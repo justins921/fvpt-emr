@@ -38,6 +38,7 @@ async function run() {
       { name: '021_denial_patterns', module: await import('./021_denial_patterns') },
       { name: '022_code_reviews', module: await import('./022_code_reviews') },
       { name: '023_appeal_drafts', module: await import('./023_appeal_drafts') },
+      { name: '024_online_booking', module: await import('./024_online_booking') },
     ];
 
     if (direction === 'up') {

@@ -156,7 +156,9 @@ router.get('/:id/download', requirePermission(Permission.ATTACHMENT_VIEW), async
     });
 
     res.setHeader('Content-Type', attachment.mime_type);
-    res.setHeader('Content-Disposition', `inline; filename="${attachment.original_filename}"`);
+    // Sanitize filename to prevent HTTP header injection (quoted-string breakout / CRLF)
+    const safeFilename = attachment.original_filename.replace(/["\r\n]/g, '').substring(0, 200) || 'download';
+    res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store'); // PHI should not be cached
 

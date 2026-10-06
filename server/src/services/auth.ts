@@ -57,7 +57,7 @@ function generateMfaChallengeToken(userId: string, clinicId: string): string {
 
 function verifyMfaChallengeToken(token: string): MfaTokenPayload | null {
   try {
-    const decoded = jwt.verify(token, config.JWT_SECRET) as MfaTokenPayload;
+    const decoded = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as MfaTokenPayload;
     if (decoded.purpose !== 'mfa_challenge') return null;
     return decoded;
   } catch {

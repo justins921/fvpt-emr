@@ -42,8 +42,10 @@ export const corsMiddleware = cors({
     if (!origin) return callback(null, true);
     // Allow configured origins
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    // On Vercel, allow any *.vercel.app preview deployments
-    if (process.env.VERCEL === '1' && origin.endsWith('.vercel.app')) return callback(null, true);
+    // Preview deployments: only allow explicitly configured origins.
+    // (Previously allowed any *.vercel.app — removed: an attacker could
+    // deploy a free Vercel app and make credentialed cross-origin calls
+    // from a logged-in staff member's browser.)
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
