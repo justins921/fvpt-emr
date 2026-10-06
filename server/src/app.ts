@@ -47,6 +47,7 @@ import noteUtilRoutes from './routes/note-utils';
 import noteTemplateRoutes from './routes/note-templates';
 import referringProviderRoutes from './routes/referring-providers';
 import patientNoteRoutes from './routes/patient-notes';
+import settingsRoutes from './routes/settings';
 
 const app = express();
 
@@ -163,6 +164,7 @@ app.use('/api/invites', inviteRoutes);
 app.use('/api/workers-comp', workersCompRoutes);
 app.use('/api/mips', mipsRoutes);
 app.use('/api/fhir', fhirRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/statements', statementRoutes);
 app.use('/api/payments', paymentRoutes);

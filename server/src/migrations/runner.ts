@@ -34,6 +34,7 @@ async function run() {
       { name: '017_dashboard_preferences', module: await import('./017_dashboard_preferences') },
       { name: '018_hep_adherence_logged_by_type', module: await import('./018_hep_adherence_logged_by_type') },
       { name: '019_user_invites', module: await import('./019_user_invites') },
+      { name: '022_code_reviews', module: await import('./022_code_reviews') },
     ];
 
     if (direction === 'up') {

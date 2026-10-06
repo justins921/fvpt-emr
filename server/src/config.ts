@@ -51,6 +51,16 @@ const envSchema = z.object({
   // Shared secret for automation endpoints (cron). Required to trigger /api/messaging/cron/*.
   CRON_SECRET: z.string().optional(),
 
+  // LLM (optional — AI billing features degrade gracefully when not set)
+  LLM_PROVIDER: z.enum(['anthropic', 'openai']).optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  LLM_MODEL: z.string().optional(), // defaults per provider when unset
+
+  // Encryption key for per-clinic AI API keys (BYOK). Must be 32 bytes hex-encoded
+  // (64 hex chars). When missing, per-clinic AI key storage is unavailable.
+  AI_CONFIG_ENCRYPTION_KEY: z.string().optional(),
+
   // Data retention (days) — 0 = keep forever
   AUDIT_LOG_RETENTION_DAYS: z.coerce.number().default(2555), // ~7 years (HIPAA minimum)
   SESSION_CLEANUP_DAYS: z.coerce.number().default(90),

@@ -5,6 +5,8 @@ import { query } from '../db';
 import { Permission, AuditAction, ClaimStatus, LedgerEntryType } from '../types';
 import { logAudit } from '../services/audit';
 import { scrubClaim, generate837P, parseERA, postERAToLedger } from '../services/claims';
+import { runCodeReview, getLatestCodeReview } from '../services/codeReview';
+import { LLMError } from '../services/llm';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -473,6 +475,38 @@ router.get('/reports/ar-aging', requirePermission(Permission.BILLING_VIEW), asyn
     }
 
     res.json({ success: true, data: { buckets, totalClaims: result.rows.length } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Documentation-to-code review (AI billing Phase 3) ──
+
+// Run an LLM-assisted review comparing a claim's CPTs against its clinical note.
+router.post('/claims/:id/code-review', requirePermission(Permission.CLAIM_SUBMIT), async (req: Request, res: Response) => {
+  try {
+    const result = await runCodeReview(req.params.id, req.auth!.clinicId, req.auth!.userId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    if (err instanceof LLMError) {
+      const status = err.statusCode;
+      // 503 = LLM not configured; surface the setup hint. Never leak note text.
+      res.status(status).json({ success: false, error: err.message, llmRequired: status === 503 });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Latest stored review for a claim (no LLM call).
+router.get('/claims/:id/code-review', requirePermission(Permission.CLAIM_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await getLatestCodeReview(req.params.id, req.auth!.clinicId);
+    if (!result) {
+      res.status(404).json({ success: false, error: 'No code review found for this claim' });
+      return;
+    }
+    res.json({ success: true, data: result });
   } catch {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }

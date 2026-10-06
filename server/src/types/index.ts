@@ -673,6 +673,7 @@ export enum AuditAction {
   CLAIM_CREATE = 'claim.create',
   CLAIM_SUBMIT = 'claim.submit',
   CLAIM_EDIT = 'claim.edit',
+  CODE_REVIEW_RUN = 'code_review.run',
   ERA_IMPORT = 'era.import',
   ERA_POST = 'era.post',
 
@@ -698,6 +699,7 @@ export enum AuditAction {
   USER_INVITE_REVOKE = 'user.invite_revoke',
   USER_INVITE_ACCEPT = 'user.invite_accept',
   SETTINGS_CHANGE = 'settings.change',
+  AI_CONFIG_UPDATE = 'ai_config.update',
   BACKUP_CREATE = 'backup.create',
   BACKUP_RESTORE = 'backup.restore',
 

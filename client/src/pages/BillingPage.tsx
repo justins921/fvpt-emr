@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
+import CodeReviewPanel from '../components/CodeReviewPanel';
 
 export default function BillingPage() {
   const location = useLocation();
@@ -37,6 +38,7 @@ function ClaimsList() {
   const [claims, setClaims] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [reviewClaimId, setReviewClaimId] = useState<string | null>(null);
 
   useEffect(() => { loadClaims(); }, [filter]);
 
@@ -123,6 +125,9 @@ function ClaimsList() {
                     <div className="flex gap-1">
                       {c.status === 'draft' && <button onClick={() => scrubClaim(c.id)} className="text-xs text-blue-600 underline">Scrub</button>}
                       {c.status === 'scrubbed' && <button onClick={() => exportClaim(c.id)} className="text-xs text-green-600 underline">Export 837P</button>}
+                      {(c.status === 'draft' || c.status === 'scrubbed' || c.status === 'scrub_failed') && (
+                        <button onClick={() => setReviewClaimId(c.id)} className="text-xs text-purple-600 underline">Review codes</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -130,6 +135,9 @@ function ClaimsList() {
             </tbody>
           </table>
         </div>
+      )}
+      {reviewClaimId && (
+        <CodeReviewPanel claimId={reviewClaimId} onClose={() => setReviewClaimId(null)} />
       )}
     </div>
   );

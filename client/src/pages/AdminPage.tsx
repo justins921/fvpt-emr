@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api, ApiError } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import ImportPage from './ImportPage';
+import AISettingsPanel from '../components/AISettingsPanel';
 
 export default function AdminPage() {
   const location = useLocation();
@@ -594,6 +595,7 @@ function AuditViewer() {
 function SettingsPanel() {
   return (
     <div className="space-y-4">
+      <AISettingsPanel />
       <div className="card">
         <h3 className="font-semibold mb-3">System Information</h3>
         <dl className="space-y-2 text-sm">
