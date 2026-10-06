@@ -64,5 +64,9 @@ AI billing features (the differentiator):
 
 - Electronic prior auth submission (beyond packet generation — needs payer APIs)
 - Real-time claim status tracking
-- Patient portal (paperwork, scheduling, payments, records access)
+- Patient portal expansion (paperwork, scheduling, payments, records access)
+- Patient HEP check-off in portal (full exercise detail; per-exercise completion + pain/difficulty → adherence log; therapist sees completion) — QUEUED after HEP templates
+- User onboarding flow (new clinic signup, invite flow, guided setup)
+- Role management UI (roles exist: owner/admin/therapist/front_desk/biller/read_only + granular permissions — needs admin UI to assign/manage)
+- Customizable dashboard (user-personalizable widgets/layout)
 - (Add new ideas here)
