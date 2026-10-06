@@ -100,10 +100,13 @@ function PortalUsersSection() {
     if (!formPatientId || !formEmail.trim()) return;
     setCreating(true); setError('');
     try {
-      await api.post('/portal/users', { patientId: formPatientId, email: formEmail.trim() });
-      setSuccess('Portal user created. Login credentials will be sent to the patient.');
+      const res = await api.post<any>('/portal/users', { patientId: formPatientId, email: formEmail.trim() });
+      const tempPw = res?.data?.temporaryPassword;
+      setSuccess(tempPw
+        ? `Portal user created. Temporary password: ${tempPw} — share this with the patient now, it won't be shown again.`
+        : 'Portal user created.');
       setShowCreate(false); setFormPatientId(''); setFormEmail('');
-      loadPortalUsers(); setTimeout(() => setSuccess(''), 5000);
+      loadPortalUsers(); setTimeout(() => setSuccess(''), 15000);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Failed to create portal user'); }
     finally { setCreating(false); }
   }

@@ -105,7 +105,9 @@ staffRouter.use(authenticate, validateSession, tenantScope);
 const createPortalUserSchema = z.object({
   patientId: z.string().uuid(),
   email: z.string().email().max(255),
-  password: z.string().min(8).max(128),
+  // Optional — if omitted, the server generates a secure temporary password
+  // and returns it once in the response for staff to share with the patient.
+  password: z.string().min(8).max(128).optional(),
 });
 
 staffRouter.post(
@@ -146,7 +148,9 @@ staffRouter.post(
         return;
       }
 
-      const passwordHash = await bcrypt.hash(input.password, 12);
+      // Auto-generate a secure temporary password when staff doesn't supply one.
+      const generatedPassword = input.password ?? crypto.randomBytes(12).toString('base64url');
+      const passwordHash = await bcrypt.hash(generatedPassword, 12);
       const verificationToken = crypto.randomBytes(32).toString('hex');
 
       const result = await query(
@@ -172,6 +176,8 @@ staffRouter.post(
           ...result.rows[0],
           verificationToken,
           patientId: input.patientId,
+          // Returned once so staff can share it with the patient. Never stored or logged.
+          ...(input.password ? {} : { temporaryPassword: generatedPassword }),
         },
       });
     } catch (err) {

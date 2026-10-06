@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 const isDev = import.meta.env.DEV;
+// Show demo hints on dev and staging (staging hostname), never on production.
+const showDemoHints = isDev || /localhost|staging|emros|vercel\.app/i.test(window.location.hostname);
 
 export default function LoginPage() {
   const { login, completeMfa, mfaPending } = useAuth();
@@ -127,7 +129,7 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            {isDev && (
+            {showDemoHints && (
               <div className="text-xs text-slate-400 text-center mt-4 space-y-1">
                 <p className="font-medium">Demo logins (password: password123!)</p>
                 <p>admin — Owner &middot; mchen — Therapist &middot; tparker — Biller</p>
