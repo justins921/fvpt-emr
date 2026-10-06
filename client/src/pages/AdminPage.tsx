@@ -436,7 +436,7 @@ const CAPABILITY_AREAS: { label: string; perms: string[] }[] = [
   { label: 'Scheduling', perms: ['schedule:create', 'schedule:edit', 'schedule:view', 'schedule:delete'] },
   { label: 'Clinical notes', perms: ['note:create', 'note:edit', 'note:view', 'note:sign', 'note:amend', 'attachment:upload', 'attachment:view', 'attachment:delete', 'poc:view', 'poc:create', 'poc:edit', 'outcome:view', 'outcome:create'] },
   { label: 'HEP', perms: ['hep:view', 'hep:create', 'hep:edit', 'hep:delete'] },
-  { label: 'Billing & claims', perms: ['billing:view', 'billing:create', 'billing:edit', 'billing:export', 'claim:submit', 'claim:view', 'era:import', 'ledger:view', 'ledger:edit', 'payment:view', 'payment:process', 'workers_comp:view', 'workers_comp:manage', 'mips:view', 'mips:manage'] },
+  { label: 'Billing & claims', perms: ['billing:view', 'billing:create', 'billing:edit', 'billing:export', 'billing:manage', 'claim:submit', 'claim:view', 'era:import', 'ledger:view', 'ledger:edit', 'payment:view', 'payment:process', 'workers_comp:view', 'workers_comp:manage', 'mips:view', 'mips:manage'] },
   { label: 'Authorizations', perms: ['authorization:view', 'authorization:manage'] },
   { label: 'Messaging & fax', perms: ['messaging:view', 'messaging:send', 'messaging:manage', 'fax:send', 'fax:view'] },
   { label: 'Internal notes', perms: ['patient_note:view', 'patient_note:create', 'patient_note:manage'] },

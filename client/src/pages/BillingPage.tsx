@@ -3,11 +3,16 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import CodeReviewPanel from '../components/CodeReviewPanel';
 import AppealDraftPanel from '../components/AppealDraftPanel';
+import { UnderpaymentsQueue, FeeSchedules } from './BillingUnderpayment';
+import BillingDenialPatterns from './BillingDenialPatterns';
 
 export default function BillingPage() {
   const location = useLocation();
   const tabs = [
     { path: '/app/billing', label: 'Claims' },
+    { path: '/app/billing/underpayments', label: 'Underpayments' },
+    { path: '/app/billing/fee-schedules', label: 'Fee Schedules' },
+    { path: '/app/billing/denial-patterns', label: 'Denial Patterns' },
     { path: '/app/billing/aging', label: 'A/R Aging' },
     { path: '/app/billing/era', label: 'ERA Import' },
   ];
@@ -28,6 +33,9 @@ export default function BillingPage() {
       </div>
       <Routes>
         <Route index element={<ClaimsList />} />
+        <Route path="underpayments" element={<UnderpaymentsQueue />} />
+        <Route path="fee-schedules" element={<FeeSchedules />} />
+        <Route path="denial-patterns" element={<BillingDenialPatterns />} />
         <Route path="aging" element={<ARAgingReport />} />
         <Route path="era" element={<ERAImport />} />
       </Routes>
@@ -41,6 +49,9 @@ function ClaimsList() {
   const [filter, setFilter] = useState('');
   const [reviewClaimId, setReviewClaimId] = useState<string | null>(null);
   const [appealClaimId, setAppealClaimId] = useState<string | null>(null);
+  const [riskById, setRiskById] = useState<Record<string, any>>({});
+  const [riskLoading, setRiskLoading] = useState<string | null>(null);
+  const [expandedRisk, setExpandedRisk] = useState<string | null>(null);
 
   useEffect(() => { loadClaims(); }, [filter]);
 
@@ -60,6 +71,30 @@ function ClaimsList() {
       }
       loadClaims();
     } catch {}
+  }
+
+  async function checkRisk(id: string) {
+    if (riskById[id]) {
+      setExpandedRisk(expandedRisk === id ? null : id);
+      return;
+    }
+    setRiskLoading(id);
+    try {
+      const res = await api.get<any>(`/billing/claims/${id}/denial-risk`);
+      const risk = res?.data ?? res;
+      setRiskById(prev => ({ ...prev, [id]: risk }));
+      setExpandedRisk(id);
+    } catch {
+      // Leave badge unshown on error; risk scoring is advisory.
+    } finally {
+      setRiskLoading(null);
+    }
+  }
+
+  function riskBadge(risk: any) {
+    if (!risk) return null;
+    const cls = risk.band === 'high' ? 'badge-red' : risk.band === 'medium' ? 'badge-yellow' : 'badge-green';
+    return <span className={`${cls} text-xs`}>Risk {risk.band}: {risk.score}</span>;
   }
 
   async function exportClaim(id: string) {
@@ -112,6 +147,7 @@ function ClaimsList() {
             </thead>
             <tbody className="divide-y">
               {claims.map((c: any) => (
+                <>
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-xs">{c.claim_number}</td>
                   <td className="px-4 py-3">
@@ -124,7 +160,7 @@ function ClaimsList() {
                   <td className="px-4 py-3 text-right font-mono">${(c.total_paid_cents / 100).toFixed(2)}</td>
                   <td className="px-4 py-3"><span className={statusColors[c.status] || 'badge-gray'}>{c.status}</span></td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
+                    <div className="flex gap-2 items-center">
                       {c.status === 'draft' && <button onClick={() => scrubClaim(c.id)} className="text-xs text-blue-600 underline">Scrub</button>}
                       {c.status === 'scrubbed' && <button onClick={() => exportClaim(c.id)} className="text-xs text-green-600 underline">Export 837P</button>}
                       {(c.status === 'draft' || c.status === 'scrubbed' || c.status === 'scrub_failed') && (
@@ -133,9 +169,25 @@ function ClaimsList() {
                       {(c.status === 'denied' || c.status === 'rejected') && (
                         <button onClick={() => setAppealClaimId(c.id)} className="text-xs text-orange-600 underline">Draft appeal</button>
                       )}
+                      <button
+                        onClick={() => checkRisk(c.id)}
+                        disabled={riskLoading === c.id}
+                        className="text-xs text-purple-600 underline disabled:opacity-50"
+                      >
+                        {riskLoading === c.id ? 'Checking...' : 'Risk'}
+                      </button>
+                      {riskById[c.id] && riskBadge(riskById[c.id])}
                     </div>
                   </td>
                 </tr>
+                {expandedRisk === c.id && riskById[c.id] && (
+                  <tr key={`${c.id}-risk`}>
+                    <td colSpan={7} className="px-4 py-3 bg-purple-50">
+                      <RiskDetail risk={riskById[c.id]} />
+                    </td>
+                  </tr>
+                )}
+                </>
               ))}
             </tbody>
           </table>
@@ -147,6 +199,41 @@ function ClaimsList() {
       {appealClaimId && (
         <AppealDraftPanel claimId={appealClaimId} onClose={() => setAppealClaimId(null)} />
       )}
+    </div>
+  );
+}
+
+function RiskDetail({ risk }: { risk: any }) {
+  if (!risk || !risk.lines || risk.lines.length === 0) {
+    return (
+      <div className="text-sm text-slate-600">
+        No denial patterns match this claim yet — not enough history to score risk.
+        Patterns are learned automatically each time an ERA posts.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="font-medium">
+        Denial risk: {risk.score}/100 ({risk.band})
+      </div>
+      {risk.lines.map((line: any, i: number) => (
+        <div key={i} className="border-l-2 border-purple-200 pl-3">
+          <div className="font-mono text-xs">
+            {line.cptCode}{line.diagnosisCode ? ` · ${line.diagnosisCode}` : ''} — risk {line.risk}
+            {line.level && <span className="text-slate-500"> ({line.level})</span>}
+          </div>
+          {line.topPatterns && line.topPatterns.length > 0 ? (
+            <ul className="list-disc list-inside text-slate-600 text-xs mt-1 space-y-0.5">
+              {line.topPatterns.map((p: any, j: number) => (
+                <li key={j}>{p.text}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-xs text-slate-500">No matching patterns for this line.</div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

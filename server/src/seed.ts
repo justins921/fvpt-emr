@@ -91,6 +91,14 @@ async function seed() {
       console.log(`Patient: ${p.firstName} ${p.lastName} (${mrn})`);
     }
 
+    // Demo patient portal login (Maria Demoson — for testing HEP check-off)
+    await client.query(`
+      INSERT INTO portal_users (clinic_id, patient_id, email, password_hash, is_active, email_verified)
+      VALUES ($1, $2, 'patient@demo.test', $3, true, true)
+      ON CONFLICT (clinic_id, email) DO UPDATE SET password_hash = $3, is_active = true
+    `, [clinicId, patientIds[1], adminHash]);
+    console.log('Portal user: patient@demo.test (password123!) — Maria Demoson');
+
     // Create insurance for first few patients
     for (let i = 0; i < 4; i++) {
       await client.query(`

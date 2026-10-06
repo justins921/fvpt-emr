@@ -4,10 +4,18 @@ import { authenticate, validateSession, requirePermission, tenantScope } from '.
 import { query } from '../db';
 import { Permission, AuditAction, ClaimStatus, LedgerEntryType } from '../types';
 import { logAudit } from '../services/audit';
-import { scrubClaim, generate837P, parseERA, postERAToLedger } from '../services/claims';
+import { scrubClaim, generate837P, parseERA, postERAToLedger, runUnderpaymentDetectionForERA } from '../services/claims';
 import { runCodeReview, getLatestCodeReview } from '../services/codeReview';
 import { draftAppeal, getAppealDrafts, updateAppealDraft } from '../services/appealDraft';
 import { LLMError } from '../services/llm';
+import {
+  scoreClaimRisk,
+  relearnClinicPatterns,
+  getClinicSetting,
+  setClinicSetting,
+  CONTRIBUTE_SETTING_KEY,
+  riskBand,
+} from '../services/denialPatterns';
 
 const router = Router();
 router.use(authenticate, validateSession, tenantScope);
@@ -554,5 +562,474 @@ router.put('/appeal-drafts/:id', requirePermission(Permission.CLAIM_SUBMIT), asy
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
+
+// ── Fee Schedules & Underpayment Detection (AI billing Phase 1) ──
+
+const feeScheduleSchema = z.object({
+  name: z.string().min(1).max(255),
+  payer_name: z.string().max(255).optional().nullable(),
+  effective_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+const feeScheduleItemSchema = z.object({
+  cpt_code: z.string().min(1).max(20),
+  allowed_amount_cents: z.number().int().min(0).max(100000000),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+// List fee schedules with item counts
+router.get('/fee-schedules', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT fs.*, COUNT(fsi.id)::int AS item_count
+       FROM fee_schedules fs
+       LEFT JOIN fee_schedule_items fsi ON fsi.schedule_id = fs.id
+       WHERE fs.clinic_id = $1
+       GROUP BY fs.id
+       ORDER BY fs.payer_name NULLS FIRST, fs.name`,
+      [req.auth!.clinicId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Create fee schedule
+router.post('/fee-schedules', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const input = feeScheduleSchema.parse(req.body);
+    const payerName = input.payer_name?.trim() || null;
+    const result = await query(
+      `INSERT INTO fee_schedules (clinic_id, payer_name, name, effective_date, is_active)
+       VALUES ($1, $2, $3, $4, COALESCE($5, true))
+       RETURNING *`,
+      [req.auth!.clinicId, payerName, input.name.trim(), input.effective_date || null, input.is_active]
+    );
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.FEE_SCHEDULE_CREATE, resourceType: 'fee_schedule',
+      resourceId: result.rows[0].id, details: { name: input.name, payer_name: payerName }, req,
+    });
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    const msg = (err as Error).message || '';
+    if (msg.includes('uq_fee_schedules')) {
+      res.status(409).json({ success: false, error: 'A fee schedule for this payer already exists (or a default schedule already exists)' });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Get one schedule with items
+router.get('/fee-schedules/:id', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const sched = await query(
+      `SELECT * FROM fee_schedules WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (sched.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Fee schedule not found' });
+      return;
+    }
+    const items = await query(
+      `SELECT * FROM fee_schedule_items WHERE schedule_id = $1 ORDER BY cpt_code`,
+      [req.params.id]
+    );
+    res.json({ success: true, data: { ...sched.rows[0], items: items.rows } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Update fee schedule
+router.put('/fee-schedules/:id', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const input = feeScheduleSchema.partial().parse(req.body);
+    const payerName = input.payer_name === undefined ? undefined : (input.payer_name?.trim() || null);
+    const result = await query(
+      `UPDATE fee_schedules SET
+         name = COALESCE($3, name),
+         payer_name = COALESCE($4, payer_name),
+         effective_date = COALESCE($5, effective_date),
+         is_active = COALESCE($6, is_active),
+         updated_at = NOW()
+       WHERE id = $1 AND clinic_id = $2
+       RETURNING *`,
+      [req.params.id, req.auth!.clinicId, input.name?.trim() ?? null, payerName ?? null,
+       input.effective_date ?? null, input.is_active ?? null]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Fee schedule not found' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.FEE_SCHEDULE_EDIT, resourceType: 'fee_schedule',
+      resourceId: req.params.id, details: input, req,
+    });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Delete fee schedule (items cascade)
+router.delete('/fee-schedules/:id', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `DELETE FROM fee_schedules WHERE id = $1 AND clinic_id = $2 RETURNING id`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Fee schedule not found' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.FEE_SCHEDULE_DELETE, resourceType: 'fee_schedule',
+      resourceId: req.params.id, details: {}, req,
+    });
+    res.json({ success: true, data: { id: req.params.id } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Upsert a rate item (add or update by CPT)
+router.post('/fee-schedules/:id/items', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const input = feeScheduleItemSchema.parse(req.body);
+    const sched = await query(
+      `SELECT id FROM fee_schedules WHERE id = $1 AND clinic_id = $2`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (sched.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Fee schedule not found' });
+      return;
+    }
+    const result = await query(
+      `INSERT INTO fee_schedule_items (schedule_id, cpt_code, allowed_amount_cents, notes)
+       VALUES ($1, UPPER(TRIM($2)), $3, $4)
+       ON CONFLICT (schedule_id, cpt_code)
+       DO UPDATE SET allowed_amount_cents = EXCLUDED.allowed_amount_cents,
+                     notes = EXCLUDED.notes, updated_at = NOW()
+       RETURNING *`,
+      [req.params.id, input.cpt_code, input.allowed_amount_cents, input.notes ?? null]
+    );
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.FEE_SCHEDULE_EDIT, resourceType: 'fee_schedule',
+      resourceId: req.params.id,
+      details: { cpt_code: input.cpt_code.toUpperCase().trim(), allowed_amount_cents: input.allowed_amount_cents }, req,
+    });
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Delete a rate item
+router.delete('/fee-schedules/:id/items/:itemId', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `DELETE FROM fee_schedule_items
+       WHERE id = $1 AND schedule_id IN (SELECT id FROM fee_schedules WHERE id = $2 AND clinic_id = $3)
+       RETURNING id`,
+      [req.params.itemId, req.params.id, req.auth!.clinicId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Rate not found' });
+      return;
+    }
+    res.json({ success: true, data: { id: req.params.itemId } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Underpayment review queue ──
+
+const underpaymentStatusSchema = z.object({
+  status: z.enum(['open', 'in_review', 'appealed', 'resolved', 'wont_pursue']),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+// Queue summary stats
+router.get('/underpayments/summary', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT status, COUNT(*)::int AS count, COALESCE(SUM(shortfall_cents), 0)::int AS shortfall_cents
+       FROM underpayment_flags WHERE clinic_id = $1 GROUP BY status`,
+      [req.auth!.clinicId]
+    );
+    const byStatus: Record<string, { count: number; shortfall_cents: number }> = {};
+    for (const row of result.rows) byStatus[row.status] = { count: row.count, shortfall_cents: row.shortfall_cents };
+    const open = byStatus.open ?? { count: 0, shortfall_cents: 0 };
+    res.json({ success: true, data: { byStatus, openCount: open.count, openShortfallCents: open.shortfall_cents } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// List flags (optional ?status= filter)
+router.get('/underpayments', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : null;
+    const params: unknown[] = [req.auth!.clinicId];
+    let where = `uf.clinic_id = $1`;
+    if (status && ['open', 'in_review', 'appealed', 'resolved', 'wont_pursue'].includes(status)) {
+      params.push(status);
+      where += ` AND uf.status = $2`;
+    }
+    const result = await query(
+      `SELECT uf.*, c.claim_number, c.service_date,
+              p.first_name AS patient_first_name, p.last_name AS patient_last_name, p.id AS patient_id,
+              i.payer_name
+       FROM underpayment_flags uf
+       JOIN claims c ON c.id = uf.claim_id
+       JOIN patients p ON p.id = c.patient_id
+       LEFT JOIN insurance i ON i.id = c.insurance_id
+       WHERE ${where}
+       ORDER BY uf.shortfall_cents DESC`,
+      params
+    );
+    res.json({ success: true, data: result.rows });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Update flag status / notes
+router.put('/underpayments/:id', requirePermission(Permission.BILLING_EDIT), async (req: Request, res: Response) => {
+  try {
+    const input = underpaymentStatusSchema.parse(req.body);
+    const result = await query(
+      `UPDATE underpayment_flags
+       SET status = $3, notes = COALESCE($4, notes), updated_at = NOW()
+       WHERE id = $1 AND clinic_id = $2
+       RETURNING *`,
+      [req.params.id, req.auth!.clinicId, input.status, input.notes ?? null]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Underpayment flag not found' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.UNDERPAYMENT_REVIEW, resourceType: 'underpayment_flag',
+      resourceId: req.params.id, details: { status: input.status }, req,
+    });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Manual / historical detection run: re-parse posted ERAs and detect
+router.post('/underpayments/run', requirePermission(Permission.BILLING_EDIT), async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({ era_id: z.string().uuid().optional() });
+    const input = schema.parse(req.body);
+    let eraIds: string[];
+    if (input.era_id) {
+      eraIds = [input.era_id];
+    } else {
+      const eras = await query(
+        `SELECT id FROM era_files WHERE clinic_id = $1 AND posted = true ORDER BY posted_at DESC`,
+        [req.auth!.clinicId]
+      );
+      eraIds = eras.rows.map((r: { id: string }) => r.id);
+    }
+    let flagged = 0;
+    let updated = 0;
+    const missingRateLines: Array<{ claimId: string; cptCode: string }> = [];
+    for (const eraId of eraIds) {
+      const detection = await runUnderpaymentDetectionForERA(req.auth!.clinicId, eraId);
+      flagged += detection.flagged;
+      updated += detection.updated;
+      missingRateLines.push(...detection.skippedMissingRate);
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId, userId: req.auth!.userId,
+      action: AuditAction.UNDERPAYMENT_REVIEW, resourceType: 'underpayment_detection',
+      resourceId: input.era_id ?? 'all-posted',
+      details: { flagged, updated, missingRates: missingRateLines.length }, req,
+    });
+    res.json({
+      success: true,
+      data: { erasScanned: eraIds.length, flagged, updated, missingRates: missingRateLines.length },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: (err as Error).message || 'Internal server error' });
+  }
+});
+
+// ── Underpayment threshold setting ──
+
+router.get('/settings/underpayment-threshold', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const { getThresholdCents } = await import('../services/underpayment');
+    const cents = await getThresholdCents(req.auth!.clinicId);
+    res.json({ success: true, data: { threshold_cents: cents } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.put('/settings/underpayment-threshold', requirePermission(Permission.BILLING_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const input = z.object({ threshold_cents: z.number().int().min(0).max(100000) }).parse(req.body);
+    const { setThresholdCents } = await import('../services/underpayment');
+    await setThresholdCents(req.auth!.clinicId, input.threshold_cents);
+    res.json({ success: true, data: { threshold_cents: input.threshold_cents } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input', details: err.errors });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+
+// ── Denial Pattern Mining (AI billing Phase 2) ──
+
+// List learned denial patterns. Sample sizes are always returned alongside
+// rates — never present a rate without its sample size.
+router.get('/denial-patterns', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({
+      payer: z.string().optional(),
+      minRate: z.coerce.number().min(0).max(1).optional(),
+      minSamples: z.coerce.number().int().min(0).optional(),
+      scope: z.enum(['clinic', 'global', 'all']).optional().default('clinic'),
+    });
+    const q = schema.parse(req.query);
+    const clinicId = req.auth!.clinicId;
+
+    const conds: string[] = [];
+    const params: any[] = [];
+    if (q.scope === 'all') {
+      conds.push(`(scope = 'global' OR (scope = 'clinic' AND clinic_id = $${params.length + 1}))`);
+      params.push(clinicId);
+    } else if (q.scope === 'clinic') {
+      conds.push(`scope = 'clinic' AND clinic_id = $${params.length + 1}`);
+      params.push(clinicId);
+    } else {
+      conds.push(`scope = 'global'`);
+    }
+    if (q.payer) {
+      conds.push(`payer_name ILIKE $${params.length + 1}`);
+      params.push(`%${q.payer}%`);
+    }
+    if (q.minRate !== undefined) {
+      conds.push(`denial_rate >= $${params.length + 1}`);
+      params.push(q.minRate);
+    }
+    if (q.minSamples !== undefined) {
+      conds.push(`total_lines >= $${params.length + 1}`);
+      params.push(q.minSamples);
+    }
+
+    const result = await query(
+      `SELECT id, scope, payer_name, cpt_code, diagnosis_code, reason_code,
+              total_lines, denied_lines, denial_rate, contributing_clinics,
+              last_seen_at, updated_at
+       FROM denial_patterns
+       WHERE ${conds.join(' AND ')}
+       ORDER BY denial_rate DESC, total_lines DESC
+       LIMIT 500`,
+      params
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input' });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Pre-submission denial risk score for a claim.
+router.get('/claims/:id/denial-risk', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const risk = await scoreClaimRisk(req.params.id, req.auth!.clinicId);
+    res.json({ success: true, data: risk });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Rebuild clinic patterns from all posted ERAs. Uses ERA_IMPORT (not a new
+// BILLING_MANAGE permission) to avoid conflicting with unpushed Phase 1 work
+// that defines BILLING_MANAGE; ERA_IMPORT holders already manage ERA data.
+router.post('/denial-patterns/relearn', requirePermission(Permission.ERA_IMPORT), async (req: Request, res: Response) => {
+  try {
+    const result = await relearnClinicPatterns(req.auth!.clinicId);
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.DENIAL_PATTERNS_RELEARN,
+      resourceType: 'denial_patterns',
+      resourceId: req.auth!.clinicId,
+      details: result,
+      req,
+    });
+    res.json({ success: true, data: result });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Cross-clinic contribution opt-in flag (default false). The aggregation
+// pipeline is a future build; this flag just records consent now.
+router.get('/denial-patterns/contribute', requirePermission(Permission.BILLING_VIEW), async (req: Request, res: Response) => {
+  try {
+    const value = await getClinicSetting(req.auth!.clinicId, CONTRIBUTE_SETTING_KEY, 'false');
+    res.json({ success: true, data: { enabled: value === 'true' } });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.put('/denial-patterns/contribute', requirePermission(Permission.SETTINGS_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const schema = z.object({ enabled: z.boolean() });
+    const input = schema.parse(req.body);
+    await setClinicSetting(req.auth!.clinicId, CONTRIBUTE_SETTING_KEY, input.enabled ? 'true' : 'false');
+    res.json({ success: true, data: { enabled: input.enabled } });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: 'Invalid input' });
+      return;
+    }
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 
 export default router;

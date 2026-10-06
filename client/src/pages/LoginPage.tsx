@@ -128,9 +128,11 @@ export default function LoginPage() {
             </button>
 
             {isDev && (
-              <p className="text-xs text-slate-400 text-center mt-4">
-                Demo: admin / password123!
-              </p>
+              <div className="text-xs text-slate-400 text-center mt-4 space-y-1">
+                <p className="font-medium">Demo logins (password: password123!)</p>
+                <p>admin — Owner &middot; mchen — Therapist &middot; tparker — Biller</p>
+                <p>lnguyen — Front desk &middot; jobserver — Read-only</p>
+              </div>
             )}
           </form>
         )}

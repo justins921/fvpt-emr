@@ -50,6 +50,7 @@ export enum Permission {
   BILLING_CREATE = 'billing:create',
   BILLING_EDIT = 'billing:edit',
   BILLING_EXPORT = 'billing:export',
+  BILLING_MANAGE = 'billing:manage',
   CLAIM_SUBMIT = 'claim:submit',
   CLAIM_VIEW = 'claim:view',
   ERA_IMPORT = 'era:import',
@@ -281,6 +282,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.BILLING_CREATE,
     Permission.BILLING_EDIT,
     Permission.BILLING_EXPORT,
+    Permission.BILLING_MANAGE,
     Permission.CLAIM_SUBMIT,
     Permission.CLAIM_VIEW,
     Permission.ERA_IMPORT,
@@ -679,6 +681,15 @@ export enum AuditAction {
   APPEAL_DRAFT_SENT = 'appeal_draft.sent',
   ERA_IMPORT = 'era.import',
   ERA_POST = 'era.post',
+
+  // Fee schedules & underpayment detection (AI billing Phase 1)
+  FEE_SCHEDULE_CREATE = 'fee_schedule.create',
+  FEE_SCHEDULE_EDIT = 'fee_schedule.edit',
+  FEE_SCHEDULE_DELETE = 'fee_schedule.delete',
+  UNDERPAYMENT_REVIEW = 'underpayment.review',
+
+  // Denial pattern mining (AI billing Phase 2)
+  DENIAL_PATTERNS_RELEARN = 'denial_patterns.relearn',
 
   // Import
   DATA_IMPORT = 'data.import',

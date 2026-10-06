@@ -46,8 +46,8 @@ Living document — updated 2026-10-05. Lives in the repo root as ROADMAP.md.
 ## Approved — build after the above
 
 AI billing features (the differentiator):
-- [ ] Phase 1: Underpayment detection (fee schedules + ERA line-item parsing → flag shortfalls)
-- [ ] Phase 2: Denial pattern mining (learn from ERA history → pre-submission risk scoring)
+- [x] Phase 1: Underpayment detection — BUILT 2026-10-05 (migration 020): fee schedules (per-payer + default, CPT rates), detection engine comparing ERA line-item paid vs contracted rate, auto-run on ERA post + manual run, review queue with open/in_review/appealed/resolved/wont_pursue workflow, configurable threshold (default $1), summary stats. Pending: migration run on staging + QA.
+- [x] Phase 2: Denial pattern mining — BUILT 2026-10-05 (migration 021): learns payer/CPT/diagnosis/reason-code patterns from posted ERAs; pre-submission risk scoring (Low/Medium/High) with sample sizes always shown; <5 samples = no predictive score; cross-clinic design (isolated clinic patterns, opt-in anonymized contribution, global stats only) with aggregation pipeline as future build. Pending: migration run on staging + QA.
 - [x] Phase 3: Documentation-to-code matching (LLM reads note → flags missing/unsupported codes) — migration 022 (code_reviews + clinic_ai_config tables); provider abstraction (Anthropic/OpenAI); BYOK: each clinic uses its OWN encrypted API key (AES-256-GCM, AI_CONFIG_ENCRYPTION_KEY required) set in Settings → AI — never a shared key; env vars (LLM_PROVIDER + API key) are the staging fallback only; AI features are fully optional
 - [x] Phase 4: Denial appeal drafts (LLM drafts payer appeal letter from denial reasons + note quotes; editable draft → edited → sent workflow; never auto-sends; reuses Phase 3 BYOK plumbing and 503 handling) — migration 023 (appeal_drafts table) — ALL FOUR AI BILLING DIFFERENTIATORS COMPLETE
 

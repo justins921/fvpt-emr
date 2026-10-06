@@ -1,5 +1,11 @@
 import { Claim, ClaimLineItem, ClaimStatus } from '../types';
 import { query } from '../db';
+import {
+  detectUnderpayments,
+  DetectionResult,
+  UnderpaymentLine,
+} from './underpayment';
+import { learnFromERA } from './denialPatterns';
 
 // ── Claim Scrubbing Rules ──
 export interface ScrubResult {
@@ -201,6 +207,11 @@ export interface ParsedERA {
       paidAmount: number;
       adjustmentAmount: number;
       denialReason: string | null;
+      // Per-line CAS adjustments, in segment order. Added for denial-pattern
+      // mining (Phase 2): the legacy claim-level `adjustments` array only
+      // keeps CO/OA reasons and drops the group code, which is insufficient
+      // for line-level learning. Each entry is one CAS triplet as parsed.
+      denialReasons: Array<{ groupCode: string; reasonCode: string; amount: number }>;
     }>;
   }>;
 }
@@ -267,15 +278,23 @@ export function parseERA(content: string): ParsedERA {
             paidAmount: parseFloat(elements[3] || '0') * 100,
             adjustmentAmount: 0,
             denialReason: null,
+            denialReasons: [],
           });
         }
         break;
       case 'CAS':
         if (currentClaim && currentClaim.lineItems.length > 0) {
           const lastItem = currentClaim.lineItems[currentClaim.lineItems.length - 1];
+          const groupCode = (elements[1] || '').trim();
           const reasonCode = elements[2] || '';
           const amount = parseFloat(elements[3] || '0') * 100;
           lastItem.adjustmentAmount += amount;
+          // Record every CAS triplet on the line for denial-pattern mining.
+          // (The parser reads only the first triplet per CAS segment, matching
+          // the pre-existing simplification.)
+          if (reasonCode) {
+            lastItem.denialReasons.push({ groupCode, reasonCode, amount });
+          }
           if (elements[1] === 'CO' || elements[1] === 'OA') {
             currentClaim.adjustments.push({ reasonCode, amount });
           }
@@ -299,7 +318,7 @@ export async function postERAToLedger(
   eraId: string,
   clinicId: string,
   postedBy: string
-): Promise<{ posted: number; errors: string[] }> {
+): Promise<{ posted: number; errors: string[]; underpaymentSummary: { flagged: number; updated: number; missingRates: number } | null }> {
   const eraResult = await query(
     'SELECT * FROM era_files WHERE id = $1 AND clinic_id = $2',
     [eraId, clinicId]
@@ -317,11 +336,15 @@ export async function postERAToLedger(
   const parsed = parseERA(era.raw_content);
   let posted = 0;
   const errors: string[] = [];
+  const detectionLines: UnderpaymentLine[] = [];
 
   for (const eraClaim of parsed.claims) {
     // Try to match claim by claim number
     const claimResult = await query(
-      `SELECT id, patient_id FROM claims WHERE clinic_id = $1 AND (claim_number = $2 OR id::text LIKE $3)`,
+      `SELECT c.id, c.patient_id, i.payer_name
+       FROM claims c
+       LEFT JOIN insurance i ON i.id = c.insurance_id
+       WHERE c.clinic_id = $1 AND (c.claim_number = $2 OR c.id::text LIKE $3)`,
       [clinicId, eraClaim.claimNumber, `${eraClaim.claimNumber}%`]
     );
 
@@ -375,6 +398,20 @@ export async function postERAToLedger(
     );
 
     posted++;
+
+    // Collect line items for underpayment detection (paid vs contracted rate)
+    const payerName = claim.payer_name || parsed.payerName || null;
+    for (const li of eraClaim.lineItems) {
+      if (!li.cptCode) continue;
+      detectionLines.push({
+        claimId: claim.id,
+        payerName,
+        cptCode: li.cptCode,
+        billedCents: Math.round(li.chargeAmount),
+        paidCents: Math.round(li.paidAmount),
+        eraId,
+      });
+    }
   }
 
   // Mark ERA as posted
@@ -383,5 +420,72 @@ export async function postERAToLedger(
     [eraId, postedBy]
   );
 
-  return { posted, errors };
+  // Auto-run underpayment detection on the posted lines. Detection failures
+  // must never block a successful post — collect them as errors instead.
+  let underpaymentSummary: { flagged: number; updated: number; missingRates: number } | null = null;
+  try {
+    const detection = await detectUnderpayments(clinicId, detectionLines);
+    underpaymentSummary = {
+      flagged: detection.flagged,
+      updated: detection.updated,
+      missingRates: detection.skippedMissingRate.length,
+    };
+  } catch (e) {
+    errors.push(`Underpayment detection failed: ${(e as Error).message}`);
+  }
+
+  // Auto-learn denial patterns from this ERA (Phase 2). Learning failures
+  // must never block posting.
+  try {
+    await learnFromERA(eraId, clinicId);
+  } catch (err) {
+    console.error('Denial pattern learning failed for ERA', eraId, err);
+  }
+
+  return { posted, errors, underpaymentSummary };
+}
+
+/**
+ * Manual / historical underpayment detection for one ERA file.
+ * Re-parses the ERA and runs the detection engine over its line items.
+ */
+export async function runUnderpaymentDetectionForERA(
+  clinicId: string,
+  eraId: string
+): Promise<DetectionResult> {
+  const eraResult = await query(`SELECT * FROM era_files WHERE id = $1 AND clinic_id = $2`, [
+    eraId,
+    clinicId,
+  ]);
+  if (eraResult.rows.length === 0) {
+    throw new Error('ERA file not found');
+  }
+  const parsed = parseERA(eraResult.rows[0].raw_content);
+  const lines: UnderpaymentLine[] = [];
+
+  for (const eraClaim of parsed.claims) {
+    const claimResult = await query(
+      `SELECT c.id, i.payer_name
+       FROM claims c
+       LEFT JOIN insurance i ON i.id = c.insurance_id
+       WHERE c.clinic_id = $1 AND (c.claim_number = $2 OR c.id::text LIKE $3)`,
+      [clinicId, eraClaim.claimNumber, `${eraClaim.claimNumber}%`]
+    );
+    if (claimResult.rows.length === 0) continue;
+    const claim = claimResult.rows[0];
+    const payerName = claim.payer_name || parsed.payerName || null;
+    for (const li of eraClaim.lineItems) {
+      if (!li.cptCode) continue;
+      lines.push({
+        claimId: claim.id,
+        payerName,
+        cptCode: li.cptCode,
+        billedCents: Math.round(li.chargeAmount),
+        paidCents: Math.round(li.paidAmount),
+        eraId,
+      });
+    }
+  }
+
+  return detectUnderpayments(clinicId, lines);
 }
