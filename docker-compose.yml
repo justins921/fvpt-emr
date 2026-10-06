@@ -32,14 +32,26 @@ services:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgresql://emr:${DB_PASSWORD:-emr_dev_password}@db:5432/fvpt_emr
-      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_IN_PRODUCTION_MIN_32_CHARS!!}
+      # SECURITY: These have no defaults. Compose will refuse to start with a
+      # clear error if they are not set in your .env file. Generate with:
+      #   openssl rand -hex 64
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (openssl rand -hex 64)}
+      PHI_ENCRYPTION_KEY: ${PHI_ENCRYPTION_KEY:?Set PHI_ENCRYPTION_KEY in .env (openssl rand -hex 64)}
       UPLOAD_DIR: /app/uploads
-      ALLOWED_ORIGINS: https://emr.local,https://${HOSTNAME:-localhost}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-25}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://emr.local,https://${HOSTNAME:-localhost}}
       TRUST_PROXY: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "3001:3001"
     volumes:
       - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/health').then(r => { if (!r.ok) process.exit(1) })\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   client:
     build:

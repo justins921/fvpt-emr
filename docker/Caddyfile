@@ -1,10 +1,21 @@
+# Caddy reverse proxy for FVPT-EMR on-site deployment.
+#
+# DOMAIN controls which hostname Caddy serves and how TLS is handled:
+#   - Public domain (e.g. emr.yourclinic.com):
+#       DOMAIN=emr.yourclinic.com  ->  automatic HTTPS via Let's Encrypt
+#   - LAN-only hostname or IP (e.g. emr.local, 192.168.1.50):
+#       DOMAIN=emr.local            ->  self-signed TLS (tls internal)
+#       Set TLS_MODE=internal explicitly if Caddy can't tell.
+#
+# Set these in your .env file before running docker compose up.
+
 {
-    # Use internal/self-signed TLS for LAN
-    # In production, configure with a local CA
+    # Cookie and Authorization headers are stripped from access logs
+    # to avoid writing session tokens to disk.
 }
 
-emr.local {
-    tls internal
+{$DOMAIN:emr.local} {
+    {$TLS_MODE:tls internal}
 
     # API proxy
     handle /api/* {
