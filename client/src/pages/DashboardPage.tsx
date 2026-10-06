@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
@@ -20,6 +20,7 @@ function sortedCards(cards: CardPref[]): CardPref[] {
 export default function DashboardPage() {
   const { user } = useAuth();
   const { prefs, save: savePrefs } = useDashboardPrefs();
+  const location = useLocation();
   const [stats, setStats] = useState({ patients: 0, todayAppts: 0, pendingClaims: 0 });
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,15 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  // Open customize mode when navigated here with { state: { customize: true } }
+  useEffect(() => {
+    if ((location.state as any)?.customize) {
+      startCustomize();
+      // Clear the state so a refresh doesn't reopen it
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   async function loadDashboard() {
     try {

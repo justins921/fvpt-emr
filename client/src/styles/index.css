@@ -36,7 +36,7 @@
    primary-* utilities inside the sidebar. Scoped to aside[data-accent] so the
    rest of the app keeps the default blue. Higher specificity than the
    utilities, no !important needed. */
-aside[data-accent] .bg-primary-900 { background-color: var(--accent-900); }
+aside[data-accent].bg-primary-900 { background-color: var(--accent-900); }
 aside[data-accent] .bg-primary-800 { background-color: var(--accent-800); }
 aside[data-accent] .bg-primary-700 { background-color: var(--accent-700); }
 aside[data-accent] .text-primary-200 { color: var(--accent-200); }

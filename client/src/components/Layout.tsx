@@ -191,7 +191,7 @@ export default function Layout() {
               <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
               <div className="absolute bottom-full left-3 right-3 mb-2 z-50 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 text-slate-700">
                 <button
-                  onClick={() => { setUserMenuOpen(false); navigate('/app'); }}
+                  onClick={() => { setUserMenuOpen(false); navigate('/app', { state: { customize: true } }); }}
                   className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
                 >
                   <span>🎨</span> Customize dashboard
