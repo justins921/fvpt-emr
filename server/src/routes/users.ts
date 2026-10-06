@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import { authenticate, validateSession, requirePermission, tenantScope } from '../middleware/auth';
 import { query } from '../db';
 import { Permission, AuditAction, Role } from '../types';
@@ -213,6 +214,32 @@ router.put('/me/dashboard', async (req: Request, res: Response) => {
 });
 
 // Get single user
+// List invites for this clinic (pending first)
+// NOTE: registered before GET /:id so "invites" isn't captured as an id
+router.get('/invites', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT i.id, i.email, i.role, i.invited_by, i.expires_at, i.accepted_at,
+              i.revoked_at, i.created_at,
+              u.first_name AS invited_by_first_name, u.last_name AS invited_by_last_name,
+              CASE
+                WHEN i.accepted_at IS NOT NULL THEN 'accepted'
+                WHEN i.revoked_at IS NOT NULL THEN 'revoked'
+                WHEN i.expires_at <= NOW() THEN 'expired'
+                ELSE 'pending'
+              END AS status
+       FROM user_invites i
+       LEFT JOIN users u ON u.id = i.invited_by
+       WHERE i.clinic_id = $1
+       ORDER BY i.created_at DESC`,
+      [req.auth!.clinicId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 router.get('/:id', requirePermission(Permission.USER_VIEW), async (req: Request, res: Response) => {
   try {
     const result = await query(
@@ -341,6 +368,97 @@ router.post('/:id/deactivate', requirePermission(Permission.USER_DEACTIVATE), as
       userId: req.auth!.userId,
       action: AuditAction.USER_DEACTIVATE,
       resourceType: 'user',
+      resourceId: req.params.id,
+      req,
+    });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Staff invites ──
+
+const inviteUserSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(255),
+  role: z.nativeEnum(Role),
+});
+
+// Create a staff invite — returns the one-time token so the admin can share the link
+// (email delivery comes later; for now the admin copies the link).
+router.post('/invite', requirePermission(Permission.USER_CREATE), async (req: Request, res: Response) => {
+  try {
+    const input = inviteUserSchema.parse(req.body);
+    // Only Owner can invite Owner/Admin
+    if ([Role.OWNER, Role.ADMIN].includes(input.role) && req.auth!.role !== Role.OWNER) {
+      res.status(403).json({ success: false, error: 'Only owners can invite admin users' });
+      return;
+    }
+    // Don't invite someone who already has an account in this clinic
+    const existing = await query(
+      `SELECT id FROM users WHERE clinic_id = $1 AND LOWER(username) = $2`,
+      [req.auth!.clinicId, input.email]
+    );
+    if (existing.rows.length > 0) {
+      res.status(409).json({ success: false, error: 'A user with this email already exists in this clinic' });
+      return;
+    }
+    // Supersede any still-pending invite for this email
+    await query(
+      `UPDATE user_invites SET revoked_at = NOW()
+       WHERE clinic_id = $1 AND email = $2
+         AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()`,
+      [req.auth!.clinicId, input.email]
+    );
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const created = await query(
+      `INSERT INTO user_invites (clinic_id, email, role, invited_by, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '7 days')
+       RETURNING id, expires_at`,
+      [req.auth!.clinicId, input.email, input.role, req.auth!.userId, tokenHash]
+    );
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.USER_INVITE,
+      resourceType: 'user_invite',
+      resourceId: created.rows[0].id,
+      details: { email: input.email, role: input.role },
+      req,
+    });
+    res.status(201).json({
+      success: true,
+      data: { id: created.rows[0].id, token, expiresAt: created.rows[0].expires_at },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ success: false, error: formatZodError(err), details: err.errors });
+      return;
+    }
+    console.error('[INVITE CREATE ERROR]', err instanceof Error ? err.message : err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Revoke a pending invite
+router.post('/invites/:id/revoke', requirePermission(Permission.USER_DEACTIVATE), async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `UPDATE user_invites SET revoked_at = NOW()
+       WHERE id = $1 AND clinic_id = $2 AND accepted_at IS NULL AND revoked_at IS NULL
+       RETURNING id`,
+      [req.params.id, req.auth!.clinicId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Invite not found or already used' });
+      return;
+    }
+    await logAudit({
+      clinicId: req.auth!.clinicId,
+      userId: req.auth!.userId,
+      action: AuditAction.USER_INVITE_REVOKE,
+      resourceType: 'user_invite',
       resourceId: req.params.id,
       req,
     });

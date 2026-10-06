@@ -65,7 +65,7 @@ function verifyMfaChallengeToken(token: string): MfaTokenPayload | null {
   }
 }
 
-function buildUserResponse(user: Record<string, unknown>): Record<string, unknown> {
+export function buildUserResponse(user: Record<string, unknown>): Record<string, unknown> {
   return {
     id: user.id,
     clinicId: user.clinic_id,
@@ -115,7 +115,7 @@ async function enforceSessionConcurrencyLimit(userId: string, clinicId: string):
  * This is the shared session-creation logic used by both `login` (non-MFA)
  * and `completeMfaLogin`.
  */
-async function createSession(
+export async function createSession(
   user: Record<string, unknown>,
   req: Request
 ): Promise<{ accessToken: string; refreshToken: string }> {

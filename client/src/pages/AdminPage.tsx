@@ -55,8 +55,14 @@ function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: stri
   const [editError, setEditError] = useState('');
   const [confirmingRoleChange, setConfirmingRoleChange] = useState(false);
   const [editRole, setEditRole] = useState('');
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(); loadInvites(); }, []);
 
   async function loadUsers() {
     try {
@@ -83,6 +89,56 @@ function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: stri
   async function deactivateUser(id: string) {
     if (id === currentUserId) { return; }
     try { await api.post(`/users/${id}/deactivate`); loadUsers(); } catch {}
+  }
+
+  async function loadInvites() {
+    try {
+      const res = await api.get<any>('/users/invites');
+      setInvites(res.data || []);
+    } catch { /* keep existing list */ }
+  }
+
+  async function handleInvite(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setInviteError(''); setInviteLink(''); setCopiedLink(false);
+    const fd = new FormData(e.currentTarget);
+    try {
+      const res = await api.post<any>('/users/invite', {
+        email: (fd.get('email') as string)?.trim(),
+        role: fd.get('role'),
+      });
+      const token = res.data?.token;
+      if (token) {
+        setInviteLink(`${window.location.origin}/invite/${token}`);
+      }
+      setShowInviteForm(false);
+      (e.target as HTMLFormElement).reset();
+      loadInvites();
+    } catch (err) { setInviteError(err instanceof ApiError ? err.message : 'Failed to create invite'); }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopiedLink(true);
+    } catch {
+      // Clipboard API unavailable — select the text for manual copy
+      const el = document.getElementById('invite-link-text');
+      if (el) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+  }
+
+  async function revokeInvite(id: string) {
+    if (confirmRevokeId !== id) { setConfirmRevokeId(id); return; }
+    setConfirmRevokeId(null);
+    try { await api.post(`/users/invites/${id}/revoke`); loadInvites(); } catch {}
   }
 
   const isSelf = (u: any) => u.id === currentUserId;
@@ -145,8 +201,39 @@ function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: stri
     <div className="space-y-4">
       <div className="flex justify-between">
         <h3 className="font-semibold">Users</h3>
-        <button onClick={() => { setShowForm(!showForm); setCreateError(''); }} className="btn-primary text-sm">+ New User</button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowInviteForm(!showInviteForm); setInviteError(''); }} className="btn-secondary text-sm">Invite User</button>
+          <button onClick={() => { setShowForm(!showForm); setCreateError(''); }} className="btn-primary text-sm">+ New User</button>
+        </div>
       </div>
+      {showInviteForm && (
+        <form onSubmit={handleInvite} className="card grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div><label className="label">Email *</label><input name="email" type="email" required className="input" placeholder="newhire@example.com" /></div>
+          <div><label className="label">Role *</label>
+            <select name="role" required className="input" defaultValue="therapist">
+              {ALL_ROLES.filter(r => currentUserRole === 'owner' || !PRIVILEGED_ROLES.includes(r)).map(r => (
+                <option key={r} value={r}>{roleLabel(r)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end"><p className="text-xs text-slate-500">They'll get a link to set their own password. Link expires in 7 days.</p></div>
+          {inviteError && <div className="sm:col-span-3 text-sm text-red-600">{inviteError}</div>}
+          <div className="sm:col-span-3 flex gap-2 justify-end">
+            <button type="button" onClick={() => setShowInviteForm(false)} className="btn-secondary">Cancel</button>
+            <button type="submit" className="btn-primary">Send Invite</button>
+          </div>
+        </form>
+      )}
+      {inviteLink && (
+        <div className="card border-green-200 bg-green-50 space-y-2" role="status">
+          <p className="text-sm font-medium text-green-800">Invite created — share this link with the new user:</p>
+          <div className="flex gap-2 items-center">
+            <code id="invite-link-text" className="flex-1 text-xs bg-white border rounded px-2 py-2 break-all select-all">{inviteLink}</code>
+            <button type="button" onClick={copyInviteLink} className="btn-secondary text-sm whitespace-nowrap">{copiedLink ? 'Copied!' : 'Copy Link'}</button>
+          </div>
+          <button type="button" onClick={() => setInviteLink('')} className="text-xs text-slate-500 underline">Dismiss</button>
+        </div>
+      )}
       {showForm && (
         <form onSubmit={handleCreate} className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div><label className="label">Username *</label><input name="username" type="text" required className="input" /></div>
@@ -203,6 +290,50 @@ function UsersManager({ currentUserId, currentUserRole }: { currentUserId?: stri
           </tbody>
         </table>
       </div>
+
+      {invites.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold">Invites</h3>
+          <div className="card p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b"><tr>
+                <th className="text-left px-4 py-3">Email</th>
+                <th className="text-left px-4 py-3">Role</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-left px-4 py-3">Expires</th>
+                <th className="text-left px-4 py-3">Actions</th>
+              </tr></thead>
+              <tbody className="divide-y">
+                {invites.map((inv: any) => (
+                  <tr key={inv.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium">{inv.email}</td>
+                    <td className="px-4 py-3 capitalize">{roleLabel(inv.role)}</td>
+                    <td className="px-4 py-3">
+                      <span className={inv.status === 'pending' ? 'badge-yellow' : inv.status === 'accepted' ? 'badge-green' : 'badge-gray'}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{new Date(inv.expires_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {inv.status === 'pending' && (
+                        confirmRevokeId === inv.id ? (
+                          <span className="text-xs">
+                            <span className="text-amber-700 mr-2">Revoke this invite?</span>
+                            <button onClick={() => revokeInvite(inv.id)} className="text-xs text-red-600 underline mr-2">Confirm</button>
+                            <button onClick={() => setConfirmRevokeId(null)} className="text-xs text-slate-500 underline">Back</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => revokeInvite(inv.id)} className="text-xs text-red-600 underline">Revoke</button>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEditing(null)}>

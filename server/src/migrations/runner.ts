@@ -33,6 +33,7 @@ async function run() {
       { name: '016_hep_template_soft_delete', module: await import('./016_hep_template_soft_delete') },
       { name: '017_dashboard_preferences', module: await import('./017_dashboard_preferences') },
       { name: '018_hep_adherence_logged_by_type', module: await import('./018_hep_adherence_logged_by_type') },
+      { name: '019_user_invites', module: await import('./019_user_invites') },
     ];
 
     if (direction === 'up') {

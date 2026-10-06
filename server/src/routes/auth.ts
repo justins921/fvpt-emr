@@ -28,7 +28,7 @@ const mfaDisableSchema = z.object({
   userId: z.string().uuid(),
 });
 
-function setRefreshCookie(res: Response, token: string) {
+export function setRefreshCookie(res: Response, token: string) {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: config.COOKIE_SECURE,

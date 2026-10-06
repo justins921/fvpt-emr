@@ -35,6 +35,7 @@ interface AuthState {
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   switchClinic: (clinicId: string) => Promise<void>;
+  setSession: (user: User, accessToken: string) => void;
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -151,5 +152,10 @@ export const useAuth = create<AuthState>((set, get) => ({
     } catch {
       set({ isSwitchingClinic: false });
     }
+  },
+
+  setSession: (user: User, accessToken: string) => {
+    api.setAccessToken(accessToken);
+    set({ user, isAuthenticated: true, mfaPending: false, mfaToken: null, isLoading: false });
   },
 }));

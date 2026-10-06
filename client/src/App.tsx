@@ -36,6 +36,7 @@ import AuthorizationsPage from './pages/AuthorizationsPage';
 import ReferringProvidersPage from './pages/ReferringProvidersPage';
 import PatientLoginPage from './pages/portal/PatientLoginPage';
 import PatientPortal from './pages/portal/PatientPortal';
+import InviteAcceptPage from './pages/InviteAcceptPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -67,6 +68,9 @@ export default function App() {
       {/* Patient portal — separate session from staff auth */}
       <Route path="/portal-login" element={<PatientLoginPage />} />
       <Route path="/portal" element={<PatientPortal />} />
+
+      {/* Staff invite acceptance — public link */}
+      <Route path="/invite/:token" element={<InviteAcceptPage />} />
 
       {/* Protected app routes */}
       <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
